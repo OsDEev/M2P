@@ -12,6 +12,7 @@
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: light descs are big-endian
 
 static void LObjInfoInit(void);
 
@@ -950,9 +951,13 @@ void HSD_LObjSetInterestWObj(HSD_LObj* lobj, HSD_WObj* wobj)
 
 static int LObjLoad(HSD_LObj* lobj, HSD_LightDesc* ldesc)
 {
+    // Stage 2: light descs are big-endian file data (colors are bytewise;
+    // WObj sub-descs stay raw for the WObj loader).
+    u16 flags = pc_rb16(&ldesc->flags);
+    u16 attnflags = pc_rb16(&ldesc->attnflags);
     HSD_LObjSetColor(lobj, ldesc->color);
-    HSD_LObjSetFlags(lobj, ldesc->flags);
-    switch (ldesc->flags & LOBJ_TYPE_MASK) {
+    HSD_LObjSetFlags(lobj, flags);
+    switch (flags & LOBJ_TYPE_MASK) {
     case LOBJ_AMBIENT:
         break;
     case LOBJ_INFINITE:
@@ -960,34 +965,38 @@ static int LObjLoad(HSD_LObj* lobj, HSD_LightDesc* ldesc)
         break;
     case LOBJ_POINT:
         HSD_LObjSetPositionWObj(lobj, HSD_WObjLoadDesc(ldesc->position));
-        if (ldesc->attnflags & LOBJ_LIGHT_ATTN) {
+        if (attnflags & LOBJ_LIGHT_ATTN) {
             HSD_LObjSetFlags(lobj, LOBJ_RAW_PARAM);
-            HSD_LObjSetAttnK(lobj, ldesc->u.attn->k0, ldesc->u.attn->k1,
-                             ldesc->u.attn->k2);
+            HSD_LObjSetAttnK(lobj, pc_rf32(&ldesc->u.attn->k0),
+                             pc_rf32(&ldesc->u.attn->k1),
+                             pc_rf32(&ldesc->u.attn->k2));
         } else {
-            HSD_LObjSetDistAttn(lobj, ldesc->u.point->ref_dist,
-                                ldesc->u.point->ref_br,
-                                ldesc->u.point->dist_func);
+            HSD_LObjSetDistAttn(lobj, pc_rf32(&ldesc->u.point->ref_dist),
+                                pc_rf32(&ldesc->u.point->ref_br),
+                                (s32) pc_rb32(&ldesc->u.point->dist_func));
         }
         break;
     case LOBJ_SPOT:
         HSD_LObjSetPositionWObj(lobj, HSD_WObjLoadDesc(ldesc->position));
         HSD_LObjSetInterestWObj(lobj, HSD_WObjLoadDesc(ldesc->interest));
-        if (ldesc->attnflags != 0) {
+        if (attnflags != 0) {
             HSD_LObjSetFlags(lobj, LOBJ_RAW_PARAM);
-            HSD_LObjSetAttn(lobj, ldesc->u.attn->a0, ldesc->u.attn->a1,
-                            ldesc->u.attn->a2, ldesc->u.attn->k0,
-                            ldesc->u.attn->k1, ldesc->u.attn->k2);
+            HSD_LObjSetAttn(lobj, pc_rf32(&ldesc->u.attn->a0),
+                            pc_rf32(&ldesc->u.attn->a1),
+                            pc_rf32(&ldesc->u.attn->a2),
+                            pc_rf32(&ldesc->u.attn->k0),
+                            pc_rf32(&ldesc->u.attn->k1),
+                            pc_rf32(&ldesc->u.attn->k2));
         } else {
-            HSD_LObjSetDistAttn(lobj, ldesc->u.spot->ref_dist,
-                                ldesc->u.spot->ref_br,
-                                ldesc->u.spot->dist_func);
-            HSD_LObjSetSpot(lobj, ldesc->u.spot->cutoff,
-                            ldesc->u.spot->spot_func);
+            HSD_LObjSetDistAttn(lobj, pc_rf32(&ldesc->u.spot->ref_dist),
+                                pc_rf32(&ldesc->u.spot->ref_br),
+                                (s32) pc_rb32(&ldesc->u.spot->dist_func));
+            HSD_LObjSetSpot(lobj, pc_rf32(&ldesc->u.spot->cutoff),
+                            (s32) pc_rb32(&ldesc->u.spot->spot_func));
         }
         break;
     default:
-        OSReport("unexpected lightdesc flags (%x)\n", ldesc->flags);
+        OSReport("unexpected lightdesc flags (%x)\n", flags);
         HSD_Panic(__FILE__, 1610, "");
         break;
     }

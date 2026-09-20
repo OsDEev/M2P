@@ -16,6 +16,7 @@
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/mtx.h>
 #include <dolphin/vi.h> // IWYU pragma: keep
+#include <pc/pc_endian.h> // Stage 2: camera descs are big-endian
 
 static HSD_ClassInfo* default_class;
 static HSD_CObj* current;
@@ -1263,36 +1264,58 @@ static inline void CObjResetFlags(HSD_CObj* cobj, u32 flags)
 
 static int CObjLoad(HSD_CObj* cobj, HSD_CObjDesc* desc)
 {
+    // Stage 2: camera descs are big-endian file data. Integer/enum/rect
+    // fields convert here (WObj sub-descs stay raw for the WObj loader).
     static Vec3 up = { 0.0f, 1.0f, 0.0f };
-    cobj->flags = desc->common.flags;
-    CObjResetFlags(cobj, desc->common.flags);
-    HSD_CObjSetViewport(cobj, &desc->common.viewport);
-    HSD_CObjSetScissor(cobj, &desc->common.scissor);
+    HSD_RectS16 viewport;
+    Scissor scissor;
+    u16 flags = pc_rb16(&desc->common.flags);
+    u16 projection_type = pc_rb16(&desc->common.projection_type);
+    cobj->flags = flags;
+    CObjResetFlags(cobj, flags);
+    viewport.xmin = (s16) pc_rb16(&desc->common.viewport.xmin);
+    viewport.xmax = (s16) pc_rb16(&desc->common.viewport.xmax);
+    viewport.ymin = (s16) pc_rb16(&desc->common.viewport.ymin);
+    viewport.ymax = (s16) pc_rb16(&desc->common.viewport.ymax);
+    HSD_CObjSetViewport(cobj, &viewport);
+    scissor.left = pc_rb16(&desc->common.scissor.left);
+    scissor.right = pc_rb16(&desc->common.scissor.right);
+    scissor.top = pc_rb16(&desc->common.scissor.top);
+    scissor.bottom = pc_rb16(&desc->common.scissor.bottom);
+    HSD_CObjSetScissor(cobj, &scissor);
     HSD_WObjInit(cobj->eyepos, desc->common.eyepos);
     HSD_WObjInit(cobj->interest, desc->common.interest);
-    HSD_CObjSetNear(cobj, desc->common.nnear);
-    HSD_CObjSetFar(cobj, desc->common.ffar);
-    if (desc->common.flags & 1) {
+    HSD_CObjSetNear(cobj, pc_rf32(&desc->common.nnear));
+    HSD_CObjSetFar(cobj, pc_rf32(&desc->common.ffar));
+    if (flags & 1) {
         if (desc->common.up_vector != NULL) {
-            HSD_CObjSetUpVector(cobj, desc->common.up_vector);
+            Vec3 up_be;
+            up_be.x = pc_rf32(&desc->common.up_vector->x);
+            up_be.y = pc_rf32(&desc->common.up_vector->y);
+            up_be.z = pc_rf32(&desc->common.up_vector->z);
+            HSD_CObjSetUpVector(cobj, &up_be);
         } else {
             HSD_CObjSetUpVector(cobj, &up);
         }
     } else {
-        HSD_CObjSetRoll(cobj, desc->common.roll);
+        HSD_CObjSetRoll(cobj, pc_rf32(&desc->common.roll));
     }
-    switch (desc->common.projection_type) {
+    switch (projection_type) {
     case PROJ_PERSPECTIVE:
-        HSD_CObjSetPerspective(cobj, desc->perspective.fov,
-                               desc->perspective.aspect);
+        HSD_CObjSetPerspective(cobj, pc_rf32(&desc->perspective.fov),
+                               pc_rf32(&desc->perspective.aspect));
         break;
     case PROJ_ORTHO:
-        HSD_CObjSetOrtho(cobj, desc->ortho.top, desc->ortho.bottom,
-                         desc->ortho.left, desc->ortho.right);
+        HSD_CObjSetOrtho(cobj, pc_rf32(&desc->ortho.top),
+                         pc_rf32(&desc->ortho.bottom),
+                         pc_rf32(&desc->ortho.left),
+                         pc_rf32(&desc->ortho.right));
         break;
     case PROJ_FRUSTUM:
-        HSD_CObjSetFrustum(cobj, desc->frustum.top, desc->frustum.bottom,
-                           desc->frustum.left, desc->frustum.right);
+        HSD_CObjSetFrustum(cobj, pc_rf32(&desc->frustum.top),
+                           pc_rf32(&desc->frustum.bottom),
+                           pc_rf32(&desc->frustum.left),
+                           pc_rf32(&desc->frustum.right));
         break;
     default:
         HSD_ASSERT(0x7D0, 0);
