@@ -10,6 +10,7 @@
 #include <dolphin/ai.h>
 #include <dolphin/ar.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: SFX file data is big-endian
 
 /* 389334 */ static int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan,
                                            int priority, int itd_flag,
@@ -54,7 +55,8 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
 
     if (HSD_Synth_804D7738 == 0) {
         s32 j;
-        s32 header_size = hsd_SynthSFXLoadBuf[0];
+        // Stage 2: load buffer holds big-endian file header dwords.
+        s32 header_size = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[0]);
         u32 data_bytes = header_size - 0x10;
         size_t alloc_size;
         u32 total;
@@ -64,8 +66,9 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
         s32 count;
         s32 base;
 
-        alloc_size =
-            hsd_SynthSFXLoadBuf[2] * 8 + sizeof(struct SfxLoadStreamNode);
+        // Stage 2: file header dwords are big-endian.
+        alloc_size = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[2]) * 8 +
+                     sizeof(struct SfxLoadStreamNode);
         total = OSRoundUp32B(alloc_size + header_size);
         for (j = (data_bytes >> 2) - 1; j >= 0; j--) {
             ((u32*) HSD_Synth_804D7730)[j + ((total - data_bytes) >> 2)] =
@@ -73,8 +76,9 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
         }
         dnw = total - header_size;
         for (i = 0; i != 4; i++) {
-            ((u32*) HSD_Synth_804D7730)[(dnw >> 2) + i] =
-                hsd_SynthSFXLoadBuf[4U + i];
+            // Stage 2: file dwords stay big-endian in the node header.
+            pc_wb32(&((u32*) HSD_Synth_804D7730)[(dnw >> 2) + i],
+                    pc_rb32(&hsd_SynthSFXLoadBuf[4U + i]));
         }
         HSD_Synth_804D7734 = (u32*) ((u8*) HSD_Synth_804D7730 + (dnw & ~3));
 
@@ -88,9 +92,10 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
         HSD_Synth_804D7730->x0 = NULL;
         HSD_Synth_804D7730->x4 = HSD_Synth_804C2A60[0].entrynum;
         HSD_Synth_804D7730->x10 = hsd_SynthSFXBank[bankID];
-        HSD_Synth_804D7730->x14 = hsd_SynthSFXLoadBuf[1];
-        count = hsd_SynthSFXLoadBuf[2];
-        base = hsd_SynthSFXLoadBuf[3];
+        // Stage 2: file header dwords are big-endian.
+        HSD_Synth_804D7730->x14 = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[1]);
+        count = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[2]);
+        base = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[3]);
         HSD_Synth_804D7730->x8 = base;
         HSD_Synth_804D7730->xC = count;
         HSD_Synth_804D7730 = HSD_Synth_804D7730 + 1;
@@ -101,21 +106,28 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
             s32 id;
             void** bucket;
 
-            n = *HSD_Synth_804D7734;
+            // Stage 2: stream voice count is a big-endian file dword.
+            n = (s32) pc_rb32(HSD_Synth_804D7734);
             (void) n;
             nbytes = SfxLoadStreamDataSize(n << 6);
             memcpy((u8*) HSD_Synth_804D7730 + 8, HSD_Synth_804D7734, nbytes);
             for (k = 0; k < n; k++) {
+                // Stage 2: voice address fields stay big-endian; the ARAM
+                // base folds in value space so entry bytes remain valid
+                // for the BE-reading AX mixer.
                 u8* e = (u8*) HSD_Synth_804D7730 + k * 0x40;
+                u32 arambase = (u32) hsd_SynthSFXBank[bankID] * 2;
                 if (e + 0x10 != NULL) {
-                    *(u32*) (e + 0x14) += hsd_SynthSFXBank[bankID] * 2;
+                    pc_wb32(e + 0x14, pc_rb32(e + 0x14) + arambase);
                 } else {
-                    *(u32*) (e + 0x14) = HSD_Synth_804D7784;
+                    pc_wb32(e + 0x14, HSD_Synth_804D7784);
                 }
-                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18) +=
-                    hsd_SynthSFXBank[bankID] * 2;
-                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C) +=
-                    hsd_SynthSFXBank[bankID] * 2;
+                pc_wb32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18,
+                        pc_rb32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18) +
+                            arambase);
+                pc_wb32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C,
+                        pc_rb32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C) +
+                            arambase);
             }
             id = base + i;
             HSD_Synth_804D7730->x4 = id;
@@ -132,7 +144,8 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
             HSD_Synth_804C2A60[0].x8(HSD_Synth_804C2A60[0].entrynum,
                                      HSD_Synth_804C2A60[0].xC);
         }
-        hsd_SynthSFXBank[bankID] += hsd_SynthSFXLoadBuf[1];
+        hsd_SynthSFXBank[bankID] +=
+            (int) pc_rb32(&hsd_SynthSFXLoadBuf[1]);
     } else {
         if (HSD_Synth_804D7730 != NULL) {
             HSD_AudioFree(HSD_Synth_804D7730);
@@ -160,13 +173,13 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, uintptr_t args,
         HSD_ASSERTREPORT(0xCD,
                          hsd_SynthSFXBankHead[bankID + 1] -
                                  hsd_SynthSFXBank[bankID] >=
-                             hsd_SynthSFXLoadBuf[1],
+                             (int) pc_rb32(&hsd_SynthSFXLoadBuf[1]),
                          "Can't load SFX file; bank(id=%d) buffer overflow.\n",
                          HSD_Synth_804C2A60[0].bankID);
 
-        alloc_size =
-            hsd_SynthSFXLoadBuf[2] * 8 + sizeof(struct SfxLoadStreamNode);
-        header_size = hsd_SynthSFXLoadBuf[0];
+        alloc_size = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[2]) * 8 +
+                     sizeof(struct SfxLoadStreamNode);
+        header_size = (s32) pc_rb32(&hsd_SynthSFXLoadBuf[0]);
         HSD_Synth_804D7730 =
             HSD_AudioMalloc(OSRoundUp32B(alloc_size + header_size));
         HSD_Synth_804D6028[1] = HSD_DevComRequest(
@@ -175,8 +188,8 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, uintptr_t args,
         HSD_Synth_804D6028[0] = HSD_DevComRequest(
             HSD_Synth_804C2A60[0].entrynum, OSRoundUp32B(header_size + 0x10),
             hsd_SynthSFXBank[HSD_Synth_804C2A60[0].bankID],
-            hsd_SynthSFXLoadBuf[1], 0x23, 1, HSD_SynthSFXSampleLoadCallback,
-            0);
+            pc_rb32(&hsd_SynthSFXLoadBuf[1]), 0x23, 1,
+            HSD_SynthSFXSampleLoadCallback, 0);
         return;
     }
     HSD_Synth_804D7730 = NULL;
@@ -547,9 +560,10 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
     sfx_entry = hsd_SynthSFXDataHash[sfx_id & 0x1F];
 
     while (sfx_entry != NULL) {
-        if (sfx_entry->unk4 == sfx_id) {
+        // Stage 2: voice entries overlay big-endian file bytes.
+        if ((s32) pc_rb32(&sfx_entry->unk4) == sfx_id) {
             voice_idx = 0;
-            while (voice_idx < sfx_entry->unk8) {
+            while (voice_idx < (s32) pc_rb32(&sfx_entry->unk8)) {
                 voices[voice_idx] =
                     AXAcquireVoice(priority + 1, dropcallback, 0U);
                 if (voices[voice_idx] == NULL) {
@@ -561,12 +575,13 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
                 }
                 voice_idx += 1;
             }
-            if ((sfx_entry->unk8 == 2) && (voices[0] == voices[1])) {
+            if (((s32) pc_rb32(&sfx_entry->unk8) == 2) &&
+                (voices[0] == voices[1])) {
                 AXFreeVoice(voices[0]);
                 OSRestoreInterrupts(saved_interrupts);
                 return -1;
             }
-            if (sfx_entry->unk8 == 2) {
+            if ((s32) pc_rb32(&sfx_entry->unk8) == 2) {
                 hsd_SynthSFXNodes[voices[1]->index].x0 = -1;
                 hsd_SynthSFXNodes[voices[1]->index].voice[0] = voices[0];
             }
@@ -577,11 +592,13 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
             sfx_node->x27 = 1;
             sfx_node->sfx_id = sfx_id;
             sfx_node->flags = 0;
-            sfx_node->voice_count = sfx_entry->unk8;
+            sfx_node->voice_count =
+                (s32) pc_rb32(&sfx_entry->unk8);
             sfx_node->xB = itd_flag;
             sfx_node->voice[0] = voices[0];
             sfx_node->voice[1] = voices[1];
-            sfx_node->x14 = 0.00003125F * sfx_entry->unkC;
+            sfx_node->x14 =
+                0.00003125F * (s32) pc_rb32(&sfx_entry->unkC);
             sfx_node->x18[0] = pitch1;
             sfx_node->x18[1] = pitch2;
             vol_norm = 1 / 255.0F * vol;
@@ -607,7 +624,7 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
             sfx_node->x24 = ve.currentVolume;
 
             voice_idx = 0;
-            while (voice_idx < sfx_entry->unk8) {
+            while (voice_idx < (s32) pc_rb32(&sfx_entry->unk8)) {
                 AXSetVoicePriority(voices[voice_idx], priority);
                 AXSetVoiceVe(voices[voice_idx], &ve);
                 *(u32*) &HSD_Synth_80407FD8.ratioHi =
@@ -720,9 +737,11 @@ static inline void stopRange(size_t lo, size_t hi)
     for (i = 0; i < 0x40; i++) {
         struct HSD_SynthSFXNode* node = &hsd_SynthSFXNodes[i];
         if (hsd_SynthSFXNodes[i].x0 > 0) {
-            addr = *(size_t*) &hsd_SynthSFXNodes[i]
-                        .voice[0]
-                        ->pb.addr.currentAddressHi;
+            // Stage 2: BE current-address; also fixes the 64-bit
+            // over-read (size_t is 8 bytes on PC, the field is 4).
+            addr = pc_rb32((const u8*) &hsd_SynthSFXNodes[i]
+                               .voice[0]
+                               ->pb.addr.currentAddressHi);
             if (addr >= lo && addr < hi) {
                 HSD_SynthSFXStopNode(&hsd_SynthSFXNodes[i]);
             }
@@ -1189,8 +1208,9 @@ void HSD_SynthPStreamHakoHeaderCallback(int dcReq, uintptr_t src, void* buf,
 {
     HSD_DevComRequest(HSD_Synth_804D7764, src,
                       HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
-                      pstHakoHeader[HSD_Synth_804D7768].x0, 0x23, 0,
-                      HSD_SynthResetStreamCounters, 0);
+                      // Stage 2: hako headers DMA straight from disc (BE).
+                      (u32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768].x0),
+                      0x23, 0, HSD_SynthResetStreamCounters, 0);
 }
 
 static inline void HSD_SynthPStreamMasterClockCallback_inline(u32 pos)
@@ -1207,7 +1227,7 @@ static inline void HSD_SynthPStreamMasterClockCallback_inline(u32 pos)
             return;
         }
         if (getNode(HSD_Synth_804D7760) != NULL) {
-            src = pstHakoHeader[HSD_Synth_804D776C].x8;
+            src = (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D776C].x8);
             if (src == -1) {
                 HSD_Synth_804D776C = (HSD_Synth_804D776C + 1) % 3;
             } else {
@@ -1235,20 +1255,25 @@ void HSD_SynthPStreamMasterClockCallback(void)
     if (node->flags & 8) {
         return;
     }
-    pos = (*(u32*) ((u8*) node->voice[0] + 0x1B2) - HSD_Synth_804D7780 * 2) >>
+    // Stage 2: voice current-address is big-endian (written back by the
+    // AX mixer, read here for the stream position tracker).
+    pos = (pc_rb32((const u8*) node->voice[0] + 0x1B2) -
+           (u32) HSD_Synth_804D7780 * 2) >>
           0x11;
     if (pos != HSD_Synth_804D7774) {
         HSD_Synth_804D7774 = pos;
         for (i = 0; i < node->voice_count; i++) {
-            AXSetVoiceEndAddr(
-                node->voice[i],
-                (HSD_Synth_804D7780 + (HSD_Synth_804D7774 << 0x10)) * 2 +
-                    i * pstHakoHeader[HSD_Synth_804D7774].x0 +
-                    pstHakoHeader[HSD_Synth_804D7774].x4);
+                AXSetVoiceEndAddr(
+                    node->voice[i],
+                    (HSD_Synth_804D7780 + (HSD_Synth_804D7774 << 0x10)) * 2 +
+                        i * (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7774]
+                                               .x0) +
+                        (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7774]
+                                           .x4));
         }
     }
     if (pos == HSD_Synth_804D7770 && pos != HSD_Synth_804D776C) {
-        if ((u32) pstHakoHeader[HSD_Synth_804D7770].x8 == -1U) {
+        if ((s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7770].x8) == -1) {
             HSD_Synth_804D7770 = (HSD_Synth_804D7770 + 1) % 3;
             for (i = 0; i < node->voice_count; i++) {
                 AXSetVoiceLoop(node->voice[i], 0);
@@ -1260,7 +1285,9 @@ void HSD_SynthPStreamMasterClockCallback(void)
                 AXSetVoiceLoopAddr(
                     node->voice[i],
                     (HSD_Synth_804D7780 + (HSD_Synth_804D7770 << 0x10)) * 2 +
-                        i * pstHakoHeader[HSD_Synth_804D7770].x0 + 2);
+                        i * (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7770]
+                                               .x0) +
+                        2);
                 AXSetVoiceAdpcmLoop(
                     node->voice[i],
                     (AXPBADPCMLOOP*) ((u32*) &pstHakoHeader
@@ -1307,16 +1334,21 @@ void HSD_SynthPStreamFirstHakoDataCallback(void)
             AXSetVoiceCurrentAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * pstHakoHeader[HSD_Synth_804D7768].x0 + 2);
+                    i * (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768]
+                                           .x0) +
+                    2);
             AXSetVoiceEndAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * pstHakoHeader[HSD_Synth_804D7768].x0 +
-                    pstHakoHeader[HSD_Synth_804D7768].x4);
+                    i * (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768]
+                                           .x0) +
+                    (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768].x4));
             AXSetVoiceLoopAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * pstHakoHeader[HSD_Synth_804D7768].x0 + 2);
+                    i * (s32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768]
+                                           .x0) +
+                    2);
             AXSetVoiceState(node->voice[i], 1);
         }
         node->flags &= ~8;
@@ -1340,7 +1372,7 @@ void HSD_SynthPStreamFirstHakoHeaderCallback(int dcReq, uintptr_t args,
     HSD_DevComRequest(
         HSD_Synth_804D7764, 0xA0,
         HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
-        pstHakoHeader[HSD_Synth_804D7768].x0, 0x23, 0,
+        (u32) pc_rb32(&pstHakoHeader[HSD_Synth_804D7768].x0), 0x23, 0,
         (HSD_DevComCallback) HSD_SynthPStreamFirstHakoDataCallback, 0);
 }
 
@@ -1353,12 +1385,13 @@ void HSD_SynthPStreamHeaderCallback(int arg0, uintptr_t arg1, void* arg2,
 
     node = getNode(HSD_Synth_804D7760);
     if (node != NULL) {
-        node->voice_count = entry[3];
+        // Stage 2: stream header entry is big-endian file data.
+        node->voice_count = (int) pc_rb32(&entry[3]);
         if (node->voice_count == 2) {
             node->voice[1] = AXAcquireVoice(0x1D, dropcallback, 0);
             HSD_ASSERTMSG(0x5CF, node->voice[1], "entry->voice[1]");
         }
-        node->x14 = 0.00003125f * (f32) entry[2];
+        node->x14 = 0.00003125f * (f32) pc_rb32(&entry[2]);
         for (i = 0; i < node->voice_count; i++) {
             *(u32*) &HSD_Synth_80407FD8.ratioHi = (u32) (65536.0f * node->x14);
             AXSetVoiceAddr(node->voice[i], (AXPBADDR*) &entry[i * 14 + 4]);

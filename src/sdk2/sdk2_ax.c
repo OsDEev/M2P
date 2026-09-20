@@ -19,6 +19,7 @@
 #include <dolphin/ax.h>
 #include <dolphin/axfx.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: PB address fields are big-endian
 
 #include <math.h>
 #include <stdint.h>
@@ -333,35 +334,48 @@ void AXSetVoiceAddr(AXVPB* p, AXPBADDR* addr)
     }
 }
 
+// The address setters below receive native u32 values but store big-endian
+// bytes, keeping PB address fields uniformly BE (entry copies and setter
+// stores alike) for the BE-reading mixer and the game's BE readers.
+
 void AXSetVoiceLoop(AXVPB* p, u16 loop)
 {
-    if (p)
-        p->pb.addr.loopFlag = loop;
+    u8* b;
+    if (!p)
+        return;
+    b = (u8*) &p->pb.addr;
+    pc_wb16(b + 0, loop);
 }
 
 void AXSetVoiceLoopAddr(AXVPB* p, u32 addr)
 {
+    u8* b;
     if (!p)
         return;
-    p->pb.addr.loopAddressHi = (u16) (addr >> 16);
-    p->pb.addr.loopAddressLo = (u16) addr;
+    b = (u8*) &p->pb.addr;
+    pc_wb16(b + 4, (u16) (addr >> 16));
+    pc_wb16(b + 6, (u16) addr);
 }
 
 void AXSetVoiceEndAddr(AXVPB* p, u32 addr)
 {
+    u8* b;
     if (!p)
         return;
-    p->pb.addr.endAddressHi = (u16) (addr >> 16);
-    p->pb.addr.endAddressLo = (u16) addr;
+    b = (u8*) &p->pb.addr;
+    pc_wb16(b + 8, (u16) (addr >> 16));
+    pc_wb16(b + 10, (u16) addr);
 }
 
 void AXSetVoiceCurrentAddr(AXVPB* p, u32 addr)
 {
     int i;
+    u8* b;
     if (!p)
         return;
-    p->pb.addr.currentAddressHi = (u16) (addr >> 16);
-    p->pb.addr.currentAddressLo = (u16) addr;
+    b = (u8*) &p->pb.addr;
+    pc_wb16(b + 12, (u16) (addr >> 16));
+    pc_wb16(b + 14, (u16) addr);
     i = (int) (p - s_voices);
     if (i >= 0 && i < AX_MAX_VOICES) {
         s_vs[i].fpos = (float) addr;
@@ -686,6 +700,14 @@ static float voice_sample(int vi, int* ended)
         s1 = (b0 + 1 < end_addr) ? (s8) aram[b0 + 1] : s0;
         out = (s0 + (s1 - s0) * fr) / 128.f;
         st->fpos += ratio;
+    }
+    {
+        // Write back the play cursor (BE bytes) for the game's position
+        // trackers (bank-range cutoff, stream master clock).
+        u8* abw = (u8*) &v->pb.addr;
+        u32 cb = (u32) st->fpos;
+        pc_wb16(abw + 12, (u16) (cb >> 16));
+        pc_wb16(abw + 14, (u16) cb);
     }
     return out;
 }
