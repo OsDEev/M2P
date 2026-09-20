@@ -9,6 +9,7 @@
 #include "tev.h"
 #include "texp.h"
 #include <dolphin/gx/GXEnum.h>
+#include <pc/pc_endian.h> // Stage 2: material descs are big-endian
 
 static HSD_ClassInfo* default_class;
 static HSD_MObj* current_mobj;
@@ -151,10 +152,14 @@ void HSD_MObjAnim(HSD_MObj* mobj)
 
 static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
 {
-    mobj->rendermode = desc->rendermode;
+    // Stage 2: material descs are big-endian file data (colors and the
+    // all-u8 PEDesc are bytewise; rendermode/alpha/shininess convert).
+    mobj->rendermode = pc_rb32(&desc->rendermode);
     mobj->tobj = HSD_TObjLoadDesc(desc->texdesc);
     mobj->mat = HSD_MaterialAlloc();
     memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
+    mobj->mat->alpha = pc_swapf(mobj->mat->alpha);
+    mobj->mat->shininess = pc_swapf(mobj->mat->shininess);
     mobj->rendermode |= RENDER_TOON;
     if (desc->pedesc != NULL) {
         mobj->pe = hsdAllocMemPiece(sizeof(HSD_PEDesc));
