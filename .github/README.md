@@ -1,249 +1,144 @@
-Super Smash Bros Melee \
-[![Build Status]][actions]
-[![Discord Badge]][discord]
-[![Linked Progress]][progress]
-=============
+# M2P — Super Smash Bros. Melee на ПК
 
-[actions]: https://github.com/doldecomp/melee/actions/workflows/build.yml
-[discord]: https://discord.gg/hKx3FJJgrV
-[progress]: https://decomp.dev/doldecomp/melee
+[![pc-port](https://github.com/OsDEev/M2P/actions/workflows/pc-port.yml/badge.svg)](https://github.com/OsDEev/M2P/actions/workflows/pc-port.yml)
 
-[Build Status]: https://github.com/doldecomp/melee/actions/workflows/build.yml/badge.svg
-[Linked Progress]: https://decomp.dev/doldecomp/melee.svg?mode=shield&measure=complete_code&label=linked&category=all
-[Discord Badge]: https://img.shields.io/discord/727908905392275526?color=%237289DA&logo=discord&logoColor=%23FFFFFF
+Нативный порт **Super Smash Bros. Melee (GALE01)** на Windows и Linux,
+построенный поверх декомпиляции [doldecomp/melee](https://github.com/doldecomp/melee).
+Игра собирается обычным компилятором (MSVC / GCC / Clang) в исполняемый
+файл `melee_pc` — без эмуляции, напрямую через OpenGL, GLFW и
+собственный системный слой SDK2.
 
-This repo contains a matching decompilation of Super Smash Bros Melee (US).
+> ⚠️ Статус: **платформа готова, играбельность — в работе**.
+> HAL, SDK2, GUI и сборка написаны и покрывают 100% SDK-функций,
+> используемых игрой. Остаток — перенос игровых данных под little-endian
+> (см. [Дорожную карту](#дорожная-карта)).
 
-> [!TIP]
-> The DOL this repository builds can be shifted! Meaning you are able to now add and remove code as you see fit, for modding or research purposes.
+Для запуска нужен **ваш собственный дамп диска GALE01**
+(распакованный корень диска). Бинарники игры и её ассеты в репозиторий
+не входят.
 
-It builds `main.dol`:
+## Быстрый старт
 
-|Version|Game ID|SHA-1
--|-|-
-1.02|`GALE01`|`08e0bf20134dfcb260699671004527b2d6bb1a45`
+### Требования
 
-# Dependencies
+- Windows 10+ (MSVC 2022) или Linux x86-64 (GCC 11+ / Clang 14+)
+- CMake 3.20+, C99/C++17
+- Системный OpenGL
+- Linux: `libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev`
+- Интернет при первом configure (GLFW 3.4 и Dear ImGui тянутся через FetchContent)
 
-## Windows:
-On Windows, it's **highly recommended** to use native tooling. WSL or msys2 are **not** required.
-When running under WSL, [objdiff](#diffing) is unable to get filesystem notifications for automatic rebuilds.
+### Сборка
 
-- Install [Python](https://www.python.org/downloads/) and add it to `%PATH%`.
-  - Also available from the [Windows Store](https://apps.microsoft.com/store/detail/python-311/9NRWMJP3717K).
-- Download [ninja](https://github.com/ninja-build/ninja/releases) and add it to `%PATH%`.
-  - Quick install via pip: `pip install ninja`
-
-## macOS:
-- Install [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages):
-  ```
-  brew install ninja
-  ```
-- Install [wine-crossover](https://github.com/Gcenx/homebrew-wine):
-  ```
-  brew install --cask --no-quarantine gcenx/wine/wine-crossover
-  ```
-
-After OS upgrades, if macOS complains about `Wine Crossover.app` being unverified, you can unquarantine it using:
 ```sh
-sudo xattr -rd com.apple.quarantine '/Applications/Wine Crossover.app'
+cmake -S . -B build_pc -DCMAKE_BUILD_TYPE=Release
+cmake --build build_pc --config Release --parallel
 ```
 
-## Linux:
-- Install [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages).
-- For non-x86(_64) platforms: Install wine from your package manager.
-  - For x86(_64), [WiBo](https://github.com/decompals/WiBo), a minimal 32-bit Windows binary wrapper, will be automatically downloaded and used.
+Без сети (без ImGui-оверлея, останется консольный конфигуратор):
 
-# Building
-- Clone the repository:
-  ```
-  git clone https://github.com/doldecomp/melee.git --depth=1
-  ```
-- Using [Dolphin Emulator](https://dolphin-emu.org/), find your ISO and click `Properties`. Go to the `Filesystem` tab, right-click `Disc - GALE01` and select `Extract System Data`. Choose `orig/GALE01` of this repository.
-  - To save space, only `main.dol` (and `.gitkeep`) are necessary. Other files can be deleted.
-  ![](assets/dolphin-extract.png)
-- Configure:
-  ```
-  python configure.py
-  ```
-- Build:
-  ```
-  ninja
-  ```
+```sh
+cmake -S . -B build_pc -DMELEE_WANT_IMGUI=OFF
+```
 
-# Tooling
+### Запуск
 
-We use Python for our command line tooling. It is recommended that you use a [virtual environment](https://docs.python.org/3/library/venv.html).
+```sh
+./build_pc/bin/melee_pc --disc <корень диска GALE01>
+```
 
-1. Create a virtual environment.
-    ```sh
-    python -m venv --upgrade-deps '.venv'
-    ```
-1. You'll need to activate it whenever you open a new shell.
-    * Windows:
-        ```ps1
-        .venv/Scripts/Activate.ps1
-        ```
-    * Linux/macOS:
-        ```ps1
-        . .venv/bin/activate
-        ```
-1. After that, you can install or update our packages with:
-    ```sh
-    pip install -r reqs/decomp.txt
-    ```
-1. Now you can run `decomp.py` to decomp a function using [m2c](https://github.com/matt-kempster/m2c). Pass it `-h` to see all the options.
-    ```sh
-    python tools/decomp.py my_function_name
-    ```
+Полезные ключи:
 
-# Modding
-1. Dump the full game disc to a folder as described under [Building](#building), not just the system files.
-1. After cloning the repository, you can freely add new source files/folders under `/src`.
-1. Enable the non-matching build by running:
-   ```
-   python configure.py --non-matching
-   ```
-1. Add each of your source files to `configure.py`. The order determines when your files are linked, but in most cases does not matter. You can create a new `MeleeLib` definition, but you don't have to. Make sure any newly created files are marked `Equivalent`.
-   ```py
-       MeleeLib(
-           "My Custom Library",
-           [
-               Object(Equivalent, "my-cool-mod/helloworld.c"),
-           ],
-       ),
-    ```
-1. Run `ninja` to build the game.
-1. Move the build DOL from `build/GALE01/main.dol` to the `sys` folder of the game directory you created.
-1. Make sure your game directory is configured under Paths in Dolphin, then launch your `main.dol` from the Games list.
+| Ключ | Назначение |
+|---|---|
+| `--disc PATH` | корень распакованного диска |
+| `--user PATH` | каталог сейвов и настроек |
+| `--card-a/b PATH` | образы карт памяти |
+| `--width/--height N` | размер окна (`0` = авто) |
+| `--fullscreen` | полноэкранный режим |
+| `--no-gui` | без оверлея настроек |
+| `--configure` | консольный редактор настроек |
+| `--save-settings` | записать ini и выйти |
+| `--help` | все опции |
 
-# Containers
-We use [nix](https://nixos.org/) for [most of our tontinuous integration](https://github.com/doldecomp/melee/blob/1ddf751b718f86933ca93a022f93f23f823a6744/.github/workflows/build.yml#L146-L265), which can be containerized under [nixos/nix](https://hub.docker.com/r/nixos/nix/) or [nix-toolbox](https://thrix.github.io/nix-toolbox/). We plan on fully migrating our CI to nix; see [issue #1368](https://github.com/doldecomp/melee/issues/1368).
+## Управление
 
-# Diffing
+Первый контроллер — клавиатура + первый геймпад (XInput/SDL через GLFW).
+Раскладка клавиатуры по умолчанию (меняется в настройках):
 
-Once the initial build succeeds, an `objdiff.json` should exist in the project root.
+| Действие | Клавиша |
+|---|---|
+| Стик | WASD |
+| C-стик | стрелки |
+| A / B | J / K |
+| X / Y | L / I |
+| L / R | U / O |
+| Z | P |
+| Start | Enter |
+| D-pad | T F G H |
 
-Download the latest release from [encounter/objdiff](https://github.com/encounter/objdiff). Under project settings, set `Project directory`. The configuration should be loaded automatically.
+## Настройки
 
-Select an object from the left sidebar to begin diffing. Changes to the project will rebuild automatically: changes to source files, headers, `configure.py`, `splits.txt` or `symbols.txt`.
+- **F1** в игре — оверлей настроек (сборка с ImGui): видео, звук,
+  ввод с ремаппингом, пути, системные параметры.
+- Без ImGui: `melee_pc --configure` (консольное меню).
+- Файл: `melee_pc.ini` (`%APPDATA%\melee-pc` / `~/.melee-pc/`).
 
-![](assets/objdiff.png)
+## Архитектура
 
-# Contributing
+```
+melee_pc
+├── src/pc/        main(), CLI, endian-стадия-1, low-memory модель
+├── src/gui/       INI-настройки + ImGui-оверлей + консольный редактор
+├── src/hal/       «железо»: GX→OpenGL, VI/окно, PAD, AI
+│   ├── shim/      подмены заголовков (FIFO 0xCC008000 не существует на ПК)
+│   └── opengl/    контекст, TEV-шейдеры, сборщик вершин, декодеры текстур
+└── src/sdk2/      системное ПО: OS, DVD, CARD, AR, AX, MTX, THP, EXI/SI, MCC
+```
 
-Contributions are welcome! If you're new to decomp, check out our [Getting Started guide](https://doldecomp.github.io/melee/getting_started.html). Before [opening a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request), please read our [contributing guidelines](CONTRIBUTING.md). If you're new to Git and don't know how to create a pull request, we encourage you to [create an issue](https://github.com/doldecomp/melee/issues/new) with your decomp.me link and a maintainer will add your code to the repository.
+Игра (`src/melee`, `src/sysdolphin`) компилируется как есть, кроме
+`archive.c` (endian-aware замена) и `main()` (`-Dmain=melee_main`).
+HW-модули оригинального SDK в PC-сборку не входят — их символы дают
+HAL и SDK2 (проверено свипом: покрыты все ~470 SDK-вызовов игры).
 
-Most of our efforts now are directed to naming and cleanup. See our [todo list](https://doldecomp.github.io/melee/todo.html) and [cleanup index](https://doldecomp.github.io/melee/cleanup/).
+### Ключевые решения
 
-We're also happy to answer any questions in the `#smash-bros-melee` channel on Discord.
+- **TEV → GLSL**: стадии комбинирования генерируют фрагментный шейдер
+  (MODULATE/DECAL/BLEND/REPLACE/PASSCLR, KONST-регистры, fog,
+  alpha-compare); программы кэшируются по хэшу состояния.
+- **Текстуры GameCube** декодируются побайтово (I4/I8/IA4/IA8/RGB565/
+  RGB5A3/RGBA8/C4/C8/C14X2/CMPR с инвертированным сравнением DXT1).
+- **Аудио**: программный AX-микшер (ADPCM/PCM, pitch, огибающие, лупы,
+  64 голоса) → AI ring buffer → waveOut / null-sink.
+- **Карта памяти**: контейнер `M2PCARD1` на слот.
+- **XFB**: EFB блитится в окно, а game-копия конвертируется в YUYV
+  (иначе переполнение буфера в 2 раза).
+- **Адресная модель**: арена около `0x80000000` (как MRAM), ARAM —
+  оффсеты < 16 МБ; `.exe` линкуется с низкой базой, т.к. часть
+  указателей идёт через `u32`, а `lbmemory` отличает MRAM от ARAM
+  проверкой `< 0x80000000`.
 
-[![Gamecube/Wii Decompilation Discord](https://discordapp.com/api/guilds/727908905392275526/widget.png?style=banner2)](https://discord.gg/hKx3FJJgrV)
+## Дорожная карта
 
-# FAQ
-## How is the codebase structured?
+- [x] Git, HAL OpenGL, SDK2, GUI настроек, CMake, CI
+- [x] Endian-каркас: структура архивов (`pc_endian.c`), BE-ридеры везде
+      в новом коде
+- [ ] **Стадия 2 — данные**: endian-safe чтение в загрузчиках HSD
+      (`jobj/tobj/pobj/mobj/aobj/...`), SFX-банках (`synth.c`), прямых
+      чтениях моделей/анимаций
+- [ ] THP-видео (сейчас blank-playback), aux-эффекты, rumble
+- [ ] Первый загружаемый билд → отладка по CI
 
-The code in `src` is divided into several modules, the main one being `melee`, which is the game code.
+## Разработка
 
-### `melee`
-The main game code is divided into several two-letter folders, which were left behind by HAL in assert messages and game data on the original disc.
+- Ветки: `master` (здесь вся работа).
+- CI `.github/workflows/pc-port.yml`: Windows (MSVC, ±ImGui) + Linux (GCC).
+- Верхнеуровневый decomp-флоу (`configure.py`, MWERKS) не тронут и
+  продолжает работать как раньше.
+- Лицензия исходников декомпиляции — как в апстриме; новый код порта —
+  в тех же файлах без отдельных заголовков. Для игры нужен ваш
+  легальный диск.
 
-Short|Full|Notes
--|-|-
-`cm`|Camera|
-`db`|Debug|
-`ef`|Effect|Visual effects.
-`ft`|Fighter|The player characters.
-`gm`|Game|The main game loop.
-`gr`|Ground|Stages and other levels.
-`if`|Interface|User interface.
-`it`|Items|
-`lb`|Library|Utility functions that are often thin wrappers around `dolphin` or `baselib` code.
-`mn`|Menu|
-`mp`|Map|Related to stages and contains things like `mpcoll` (map collisions).
-`pl`|Player|As in users.
-`sc`|Scene|Menu, versus mode, single-player, etc. The game mode.
-`ty`|Toy|Trophies.
-`vi`|Visual|Cutscenes, etc.
+## Благодарности
 
-#### `melee/ft/kinds`
-
-HAL also used two-letter abbreviations for each fighter.
-
-Short|Full|Canonical English
--|-|-
-`Bo`|Zako<sup>1</sup> Boy|[Male wire frame](https://www.ssbwiki.com/Fighting_Wire_Frames#Male_Wire_Frame.2FCaptain_Falcon)
-`Ca`|Captain|Captain Falcon
-`Ch`|Crazy Hand|
-`Cl`|Child Link|Young Link
-`Co`|Common|Shared code
-`Dk`|Donkey Kong|
-`Dr`|Dr. Mario|
-`Fc`|Falco|
-`Fe`|Fire Emblem|Roy
-`Fx`|Fox|
-`Gk`|Giga Koopa|Giga Bowser
-`Gl`|Zako Girl|[Female wire frame](https://www.ssbwiki.com/Fighting_Wire_Frames#Female_Wire_Frame.2FZelda)
-`Gn`|Ganondorf|
-`Gw`|Mr. Game & Watch|
-`Kb`|Kirby|
-`Kp`|Koopa|Bowser
-`Lg`|Luigi|
-`Lk`|Link|
-`Mh`|Master Hand|
-`Mr`|Mario|
-`Ms`|Mars|Marth
-`Mt`|Mewtwo|
-`Nn`|Nana|
-`Ns`|Ness|
-`Pc`|Pichu|
-`Pe`|Peach|
-`Pk`|Pikachu|
-`Pp`|Popo|
-`Pr`|Purin|Jigglypuff
-`Sb`|Sandbag|
-`Sk`|Seak|Sheik
-`Ss`|Samus|
-`Ys`|Yoshi|
-`Zd`|Zelda|
-
-<sup>1</sup> Zako (雑魚) is Japanese for "trash mob" in video games, literally "small fish."
-
-### `sysdolphin/baselib`
-
-HAL's core internal library.
-Class|Full
--|-
-`AObj`|Animation
-`CObj`|Camera
-`DObj`|Draw/Display
-`FObj`|Frame
-`GObj`|Global/Game
-`JObj`|Joint
-`LObj`|Light
-`MObj`|Material
-`PObj`|Polygon
-`TObj`|Texture
-`RObj`|Reference
-`SObj`|Scene
-`WObj`|World
-
-### `dolphin`
-
-The [Dolphin SDK](https://wiki.raregamingdump.ca/index.php/Dolphin_SDK).
-
-### `MetroTRK`
-
-The Metrowerks Target Resident Kernel.
-
-### `MSL`
-
-The Metrowerks Standard Library.
-
-### `Runtime`
-
-The Gekko hardware runtime.
-
-## What can be done now that the game is fully decompiled?
-
-See our [FAQ](https://github.com/doldecomp/melee/wiki/FAQ).
+[doldecomp/melee](https://github.com/doldecomp/melee),
+[GLFW](https://www.glfw.org/), [Dear ImGui](https://github.com/ocornut/imgui).
