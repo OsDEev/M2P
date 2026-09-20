@@ -1693,6 +1693,346 @@ void gx_hal_end(void)
     hal_flush_draw();
 }
 
+// ------------------------------------------------------------ display lists
+// Executes a prebuilt GX display list (HSD static geometry). The stream
+// layout matches what HSD emits: opcode|vat, BE16 count, then per-vertex
+// attribute data in FIFO order. Attribute presence and encoding follow the
+// CURRENT VAT state (set up outside the list via GXSetVtxDesc* /
+// GXSetVtxAttrFmt*, exactly like retail). Embedded multi-byte values are
+// big-endian and decode through the same paths as indexed arrays.
+// State opcodes (CP/XF/BP loads) do not appear in HSD lists; anything that
+// is not a known draw opcode terminates the stream (safe no-op).
+static int dl_need(const u8* dl, u32 nbytes, u32 pos, u32 n)
+{
+    return pos + n <= nbytes ? 1 : 0;
+}
+
+static unsigned dl_u16(const u8* p)
+{
+    return ((unsigned) p[0] << 8) | p[1];
+}
+
+// Feed one DIRECT color from the stream (packed or numeric), advancing *pos.
+static void dl_feed_color_direct(GXAttr attr, const u8* dl, u32 nbytes,
+                                 u32* pos)
+{
+    GXCompType type = s_vtx.fmt[s_vtxfmt][attr].type;
+    GXCompCnt cnt = s_vtx.fmt[s_vtxfmt][attr].cnt;
+    int comps = (cnt == GX_CLR_RGBA) ? 4 : 3;
+    float c[4] = { 0, 0, 0, 1.f };
+    const u8* p;
+    if (!dl_need(dl, nbytes, *pos, 4)) {
+        return;
+    }
+    p = dl + *pos;
+    if (type == GX_RGB565) {
+        unsigned v = dl_u16(p);
+        *pos += 2;
+        c[0] = ((v >> 11) & 0x1F) * (255.f / 31.f) / 255.f;
+        c[1] = ((v >> 5) & 0x3F) * (255.f / 63.f) / 255.f;
+        c[2] = (v & 0x1F) * (255.f / 31.f) / 255.f;
+    } else if (type == GX_RGBA8) {
+        if (!dl_need(dl, nbytes, *pos, 4))
+            return;
+        c[0] = p[0] / 255.f;
+        c[1] = p[1] / 255.f;
+        c[2] = p[2] / 255.f;
+        c[3] = p[3] / 255.f;
+        *pos += 4;
+    } else if (type == GX_RGB8 || type == GX_RGBX8) {
+        if (!dl_need(dl, nbytes, *pos, 3))
+            return;
+        c[0] = p[0] / 255.f;
+        c[1] = p[1] / 255.f;
+        c[2] = p[2] / 255.f;
+        *pos += (type == GX_RGB8) ? 3 : 4;
+    } else if (type == GX_RGBA4) {
+        unsigned v = dl_u16(p);
+        *pos += 2;
+        c[0] = ((v >> 12) & 0xF) / 15.f;
+        c[1] = ((v >> 8) & 0xF) / 15.f;
+        c[2] = ((v >> 4) & 0xF) / 15.f;
+        c[3] = (v & 0xF) / 15.f;
+    } else if (type == GX_RGBA6) {
+        if (!dl_need(dl, nbytes, *pos, 3))
+            return;
+        {
+            u32 v = ((u32) p[0] << 16) | ((u32) p[1] << 8) | p[2];
+            c[0] = ((v >> 18) & 0x3F) / 63.f;
+            c[1] = ((v >> 12) & 0x3F) / 63.f;
+            c[2] = ((v >> 6) & 0x3F) / 63.f;
+            c[3] = (v & 0x3F) / 63.f;
+        }
+        *pos += 3;
+    } else {
+        // numeric components
+        float scale;
+        int sz, k;
+        if (type == GX_F32)
+            scale = 1.f;
+        else
+            scale = 1.f / (float) (1u << s_vtx.fmt[s_vtxfmt][attr].frac);
+        sz = comptype_size(type);
+        if (!dl_need(dl, nbytes, *pos, (u32) (comps * sz)))
+            return;
+        for (k = 0; k < comps; k++) {
+            float v = decode_num(p + k * (unsigned) sz, type, scale);
+            c[k] = (type == GX_F32) ? v : v / 255.f;
+        }
+        *pos += (u32) (comps * sz);
+    }
+    feed_clr(clr_target(), c, comps);
+}
+
+// Feed one DIRECT numeric attribute (pos/nrm/tex), advancing *pos.
+static void dl_feed_numeric(GXAttr attr, float* dst_slot, int comps,
+                            const u8* dl, u32 nbytes, u32* pos)
+{
+    GXCompType type = s_vtx.fmt[s_vtxfmt][attr].type;
+    float scale;
+    int sz, k;
+    if (type == GX_F32)
+        scale = 1.f;
+    else
+        scale = 1.f / (float) (1u << s_vtx.fmt[s_vtxfmt][attr].frac);
+    sz = comptype_size(type);
+    if (!dl_need(dl, nbytes, *pos, (u32) (comps * sz)))
+        return;
+    for (k = 0; k < comps; k++)
+        dst_slot[k] = decode_num(dl + *pos + (u32) (k * sz), type, scale);
+    *pos += (u32) (comps * sz);
+}
+
+static int dl_attr_enabled(GXAttr a)
+{
+    return (int) a >= 0 && (int) a < 32 && s_vtx.desc[a] != GX_NONE;
+}
+
+// (defined near the GXVert shim, far below)
+static GXAttr clr_target(void);
+
+void hal_execute_display_list(const u8* dl, u32 nbytes)
+{
+    u32 pos = 0;
+    if (!dl || nbytes < 3)
+        return;
+    while (pos + 3 <= nbytes) {
+        u8 op = dl[pos];
+        GXPrimitive prim;
+        GXVtxFmt vat;
+        u16 nverts;
+        u16 v;
+        switch (op & 0xF8) {
+        case 0x80:
+            prim = GX_QUADS;
+            break;
+        case 0x90:
+            prim = GX_TRIANGLES;
+            break;
+        case 0x98:
+            prim = GX_TRIANGLESTRIP;
+            break;
+        case 0xA0:
+            prim = GX_TRIANGLEFAN;
+            break;
+        case 0xA8:
+            prim = GX_LINES;
+            break;
+        case 0xB0:
+            prim = GX_LINESTRIP;
+            break;
+        case 0xB8:
+            prim = GX_POINTS;
+            break;
+        default:
+            return; // NOP / state op: end of stream
+        }
+        vat = (GXVtxFmt) (op & 0x07);
+        nverts = (u16) (((u16) dl[pos + 1] << 8) | dl[pos + 2]);
+        pos += 3;
+        gx_hal_begin(prim, vat, nverts);
+        for (v = 0; v < nverts; v++) {
+            u32 vtx_start = pos; // truncated stream guard, see below
+            int a;
+            // matrix indices first (FIFO order)
+            if (dl_attr_enabled(GX_VA_PNMTXIDX)) {
+                if (s_vtx.desc[GX_VA_PNMTXIDX] == GX_DIRECT) {
+                    if (!dl_need(dl, nbytes, pos, 1))
+                        break;
+                    feed_mtx((float) dl[pos++]);
+                } else {
+                    unsigned idx;
+                    if (s_vtx.desc[GX_VA_PNMTXIDX] == GX_INDEX16) {
+                        if (!dl_need(dl, nbytes, pos, 2))
+                            break;
+                        idx = dl_u16(dl + pos);
+                        pos += 2;
+                    } else {
+                        if (!dl_need(dl, nbytes, pos, 1))
+                            break;
+                        idx = dl[pos++];
+                    }
+                    feed_index(GX_VA_PNMTXIDX, idx);
+                }
+            }
+            for (a = GX_VA_TEX0MTXIDX; a <= GX_VA_TEX7MTXIDX; a++) {
+                if (!dl_attr_enabled((GXAttr) a))
+                    continue;
+                if (s_vtx.desc[a] == GX_DIRECT) {
+                    if (!dl_need(dl, nbytes, pos, 1))
+                        break;
+                    feed_mtx((float) dl[pos++]);
+                } else {
+                    unsigned idx;
+                    if (s_vtx.desc[a] == GX_INDEX16) {
+                        if (!dl_need(dl, nbytes, pos, 2))
+                            break;
+                        idx = dl_u16(dl + pos);
+                        pos += 2;
+                    } else {
+                        if (!dl_need(dl, nbytes, pos, 1))
+                            break;
+                        idx = dl[pos++];
+                    }
+                    feed_index((GXAttr) a, idx);
+                }
+            }
+            if (dl_attr_enabled(GX_VA_POS)) {
+                GXAttrType t = s_vtx.desc[GX_VA_POS];
+                int comps =
+                    (s_vtx.fmt[s_vtxfmt][GX_VA_POS].cnt == GX_POS_XY) ? 2
+                                                                     : 3;
+                if (t == GX_DIRECT) {
+                    float pv[3] = { 0, 0, 0 };
+                    dl_feed_numeric(GX_VA_POS, pv, comps, dl, nbytes,
+                                    &pos);
+                    feed_pos(pv, 3);
+                } else {
+                    unsigned idx;
+                    if (t == GX_INDEX16) {
+                        if (!dl_need(dl, nbytes, pos, 2))
+                            break;
+                        idx = dl_u16(dl + pos);
+                        pos += 2;
+                    } else {
+                        if (!dl_need(dl, nbytes, pos, 1))
+                            break;
+                        idx = dl[pos++];
+                    }
+                    feed_index(GX_VA_POS, idx);
+                }
+            }
+            if (dl_attr_enabled(GX_VA_NRM)) {
+                GXAttrType t = s_vtx.desc[GX_VA_NRM];
+                if (t == GX_DIRECT) {
+                    float nv[3] = { 0, 0, 0 };
+                    dl_feed_numeric(GX_VA_NRM, nv, 3, dl, nbytes, &pos);
+                    feed_nrm(nv);
+                } else {
+                    unsigned idx;
+                    if (t == GX_INDEX16) {
+                        if (!dl_need(dl, nbytes, pos, 2))
+                            break;
+                        idx = dl_u16(dl + pos);
+                        pos += 2;
+                    } else {
+                        if (!dl_need(dl, nbytes, pos, 1))
+                            break;
+                        idx = dl[pos++];
+                    }
+                    feed_index(GX_VA_NRM, idx);
+                }
+            } else if (dl_attr_enabled(GX_VA_NBT)) {
+                // NBT supplies 3 normals; the shader uses the first
+                // (bump detail is a v1 approximation).
+                GXAttrType t = s_vtx.desc[GX_VA_NBT];
+                int k;
+                for (k = 0; k < 3; k++) {
+                    if (t == GX_DIRECT) {
+                        float nv[3] = { 0, 0, 0 };
+                        dl_feed_numeric(GX_VA_NBT, nv, 3, dl, nbytes,
+                                        &pos);
+                        if (k == 0)
+                            feed_nrm(nv);
+                    } else {
+                        unsigned idx;
+                        if (t == GX_INDEX16) {
+                            if (!dl_need(dl, nbytes, pos, 2))
+                                break;
+                            idx = dl_u16(dl + pos);
+                            pos += 2;
+                        } else {
+                            if (!dl_need(dl, nbytes, pos, 1))
+                                break;
+                            idx = dl[pos++];
+                        }
+                        if (k == 0)
+                            feed_index(GX_VA_NBT, idx);
+                    }
+                }
+            }
+            if (dl_attr_enabled(GX_VA_CLR0) || dl_attr_enabled(GX_VA_CLR1)) {
+                // FIFO order: CLR0 data (if enabled) then CLR1 data.
+                GXAttr order[2] = { GX_VA_CLR0, GX_VA_CLR1 };
+                int k;
+                for (k = 0; k < 2; k++) {
+                    GXAttr ca = order[k];
+                    GXAttrType t;
+                    if (!dl_attr_enabled(ca))
+                        continue;
+                    t = s_vtx.desc[ca];
+                    if (t == GX_DIRECT) {
+                        dl_feed_color_direct(ca, dl, nbytes, &pos);
+                    } else {
+                        unsigned idx;
+                        if (t == GX_INDEX16) {
+                            if (!dl_need(dl, nbytes, pos, 2))
+                                break;
+                            idx = dl_u16(dl + pos);
+                            pos += 2;
+                        } else {
+                            if (!dl_need(dl, nbytes, pos, 1))
+                                break;
+                            idx = dl[pos++];
+                        }
+                        feed_index(ca, idx);
+                    }
+                }
+            }
+            for (a = GX_VA_TEX0; a <= GX_VA_TEX7; a++) {
+                GXAttrType t;
+                int comps;
+                if (!dl_attr_enabled((GXAttr) a))
+                    continue;
+                t = s_vtx.desc[a];
+                comps = (s_vtx.fmt[s_vtxfmt][a].cnt == GX_TEX_ST) ? 2 : 1;
+                if (t == GX_DIRECT) {
+                    float uv[2] = { 0, 0 };
+                    dl_feed_numeric((GXAttr) a, uv, comps, dl, nbytes,
+                                    &pos);
+                    feed_uv(a - GX_VA_TEX0, uv, comps);
+                } else {
+                    unsigned idx;
+                    if (t == GX_INDEX16) {
+                        if (!dl_need(dl, nbytes, pos, 2))
+                            break;
+                        idx = dl_u16(dl + pos);
+                        pos += 2;
+                    } else {
+                        if (!dl_need(dl, nbytes, pos, 1))
+                            break;
+                        idx = dl[pos++];
+                    }
+                    feed_index((GXAttr) a, idx);
+                }
+            }
+            if (pos == vtx_start)
+                return; // truncated stream: no progress possible
+        }
+        gx_hal_end();
+    }
+}
+
 // ------------------------------------------------------------ state setters
 void gx_hal_set_vtx_desc(GXAttr attr, GXAttrType type)
 {

@@ -62,6 +62,10 @@ void hal_set_cur_mtx(int id);
 // a GXTexObj into decoded data for palettized textures.
 const void* hal_tlut_resolve(unsigned name, int* fmt_out);
 
+// Display-list interpreter (owned by gx_hal.c): executes prebuilt GX
+// command streams (static PObj geometry) through the vertex assembler.
+void hal_execute_display_list(const u8* dl, u32 nbytes);
+
 // Extended texture metadata. GXTexObj is only 32 bytes in the original
 // headers (game code allocates exactly that), so everything beyond the
 // opaque blob lives here, keyed by object pointer. Owned by gx_hal.c.

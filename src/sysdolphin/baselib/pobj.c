@@ -19,6 +19,7 @@
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: PObj descs/arrays are big-endian
 
 static void PObjInfoInit(void);
 
@@ -199,6 +200,44 @@ static void HSD_EnvelopeListFree(HSD_SList* list)
     }
 }
 
+// Stage 2 (PC port): duplicate a file vertex-desc table into heap-native
+// form (enums/stride convert; frac bytes and array pointers carry over).
+static HSD_VtxDescList* vtxdesc_dup_be(const HSD_VtxDescList* src)
+{
+    HSD_VtxDescList* dst;
+    int n = 0;
+    int i;
+    if (src == NULL) {
+        return NULL;
+    }
+    while ((GXAttr) pc_rb32(&src[n].attr) != GX_VA_NULL) {
+        if (++n > 64) {
+            break;
+        }
+    }
+    dst = hsdAllocMemPiece(sizeof(HSD_VtxDescList) * (n + 1));
+    if (dst == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        dst[i].attr = (GXAttr) pc_rb32(&src[i].attr);
+        dst[i].attr_type = (GXAttrType) pc_rb32(&src[i].attr_type);
+        dst[i].comp_cnt = (GXCompCnt) pc_rb32(&src[i].comp_cnt);
+        dst[i].comp_type = (GXCompType) pc_rb32(&src[i].comp_type);
+        dst[i].frac = src[i].frac;
+        dst[i].stride = pc_rb16(&src[i].stride);
+        dst[i].vertex = src[i].vertex;
+    }
+    dst[n].attr = GX_VA_NULL;
+    dst[n].attr_type = GX_NONE;
+    dst[n].comp_cnt = 0;
+    dst[n].comp_type = 0;
+    dst[n].frac = 0;
+    dst[n].stride = 0;
+    dst[n].vertex = NULL;
+    return dst;
+}
+
 static HSD_SList* loadEnvelopeDesc(HSD_EnvelopeDesc** edesc_p)
 {
     HSD_SList* list = NULL;
@@ -215,7 +254,8 @@ static HSD_SList* loadEnvelopeDesc(HSD_EnvelopeDesc** edesc_p)
 
         while (edesc->joint) {
             *env_p = HSD_EnvelopeAlloc();
-            (*env_p)->weight = edesc->weight;
+            // Stage 2: file weight is big-endian.
+            (*env_p)->weight = pc_rf32(&edesc->weight);
             env_p = &(*env_p)->next;
             edesc++;
         }
@@ -257,13 +297,15 @@ static HSD_ShapeSet* loadShapeSetDesc(HSD_ShapeSetDesc* sdesc)
     HSD_ShapeSet* shape_set = hsdAllocMemPiece(sizeof(HSD_ShapeSet));
     HSD_ASSERT(498, shape_set);
     memset(shape_set, 0, sizeof(HSD_ShapeSet));
-    shape_set->flags = sdesc->flags;
-    shape_set->nb_shape = sdesc->nb_shape;
-    shape_set->nb_vertex_index = sdesc->nb_vertex_index;
-    shape_set->vertex_desc = sdesc->vertex_desc;
+    // Stage 2: file scalars convert; desc tables duplicate normalized
+    // (index lists are byte streams and carry over as-is).
+    shape_set->flags = pc_rb16(&sdesc->flags);
+    shape_set->nb_shape = pc_rb16(&sdesc->nb_shape);
+    shape_set->nb_vertex_index = (int) pc_rb32(&sdesc->nb_vertex_index);
+    shape_set->vertex_desc = vtxdesc_dup_be(sdesc->vertex_desc);
     shape_set->vertex_idx_list = sdesc->vertex_idx_list;
-    shape_set->nb_normal_index = sdesc->nb_normal_index;
-    shape_set->normal_desc = sdesc->normal_desc;
+    shape_set->nb_normal_index = (s32) pc_rb32(&sdesc->nb_normal_index);
+    shape_set->normal_desc = vtxdesc_dup_be(sdesc->normal_desc);
     shape_set->normal_idx_list = sdesc->normal_idx_list;
     if (shape_set->flags & SHAPESET_ADDITIVE) {
         shape_set->blend.bp = HSD_MemAlloc(shape_set->nb_shape * sizeof(f32));
@@ -280,9 +322,11 @@ static HSD_ShapeSet* loadShapeSetDesc(HSD_ShapeSetDesc* sdesc)
 static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 {
     pobj->next = HSD_PObjLoadDesc(desc->next);
-    pobj->verts = desc->verts;
-    pobj->flags = desc->flags;
-    pobj->n_display = desc->n_display;
+    // Stage 2: file desc table/enums convert on load (display bytes and
+    // array contents stay raw for the BE-aware HAL paths).
+    pobj->verts = vtxdesc_dup_be(desc->verts);
+    pobj->flags = pc_rb16(&desc->flags);
+    pobj->n_display = pc_rb16(&desc->n_display);
     pobj->display = desc->display;
     switch (pobj_type(pobj)) {
     case POBJ_SHAPEANIM:
@@ -547,18 +591,19 @@ static inline void decode_s8_xyz(void* src_base, f32 dst[3], int scale)
 
 static inline void decode_u16_xyz(void* src_base, f32 dst[3], int scale)
 {
-    u16* src = src_base;
-    dst[0] = (f32) src[0] / scale;
-    dst[1] = (f32) src[1] / scale;
-    dst[2] = (f32) src[2] / scale;
+    // Stage 2: file components are big-endian.
+    const u8* src = (const u8*) src_base;
+    dst[0] = (f32) pc_rb16(src) / scale;
+    dst[1] = (f32) pc_rb16(src + 2) / scale;
+    dst[2] = (f32) pc_rb16(src + 4) / scale;
 }
 
 static inline void decode_s16_xyz(void* src_base, f32 dst[3], int scale)
 {
-    s16* src = src_base;
-    dst[0] = (f32) src[0] / scale;
-    dst[1] = (f32) src[1] / scale;
-    dst[2] = (f32) src[2] / scale;
+    const u8* src = (const u8*) src_base;
+    dst[0] = (f32) (s16) pc_rb16(src) / scale;
+    dst[1] = (f32) (s16) pc_rb16(src + 2) / scale;
+    dst[2] = (f32) (s16) pc_rb16(src + 4) / scale;
 }
 
 static void get_shape_vertex_xyz(HSD_ShapeSet* shape_set, int shape_id,
@@ -580,7 +625,11 @@ static void get_shape_vertex_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->vertex_desc->stride;
 
     if (shape_set->vertex_desc->comp_type == GX_F32) {
-        memcpy(dst, src_base, sizeof(f32[3]));
+        // Stage 2: file floats are big-endian.
+        const u8* fsrc = (const u8*) src_base;
+        dst[0] = pc_rf32(fsrc);
+        dst[1] = pc_rf32(fsrc + 4);
+        dst[2] = pc_rf32(fsrc + 8);
     } else {
         int decimal_point = 1 << shape_set->vertex_desc->frac;
         switch (shape_set->vertex_desc->comp_type) {
@@ -625,7 +674,10 @@ static void get_shape_normal_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->normal_desc->stride;
 
     if (shape_set->normal_desc->comp_type == GX_F32) {
-        memcpy(dst, src_base, sizeof(f32[3]));
+        const u8* fsrc = (const u8*) src_base;
+        dst[0] = pc_rf32(fsrc);
+        dst[1] = pc_rf32(fsrc + 4);
+        dst[2] = pc_rf32(fsrc + 8);
     } else {
         int decimal_point = 1 << shape_set->normal_desc->frac;
         switch (shape_set->normal_desc->comp_type) {
@@ -670,7 +722,11 @@ static void get_shape_nbt_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->normal_desc->stride;
 
     if (shape_set->normal_desc->comp_type == GX_F32) {
-        memcpy(dst, src_base, sizeof(f32[9]));
+        // Stage 2: file floats are big-endian.
+        const u8* fsrc = (const u8*) src_base;
+        for (i = 0; i < 9; i++) {
+            dst[i] = pc_rf32(fsrc + i * 4);
+        }
     } else {
         int decimal_point = 1 << shape_set->normal_desc->frac;
         switch (shape_set->normal_desc->comp_type) {
@@ -686,12 +742,17 @@ static void get_shape_nbt_xyz(HSD_ShapeSet* shape_set, int shape_id,
             break;
         case GX_U16:
             for (i = 0; i < 9; i++) {
-                dst[i] = (float) ((u16*) src_base)[i] / decimal_point;
+                // Stage 2: file components are big-endian.
+                dst[i] =
+                    (float) pc_rb16((const u8*) src_base + i * 2) /
+                    decimal_point;
             }
             break;
         case GX_S16:
             for (i = 0; i < 9; i++) {
-                dst[i] = (float) ((s16*) src_base)[i] / decimal_point;
+                dst[i] =
+                    (float) (s16) pc_rb16((const u8*) src_base + i * 2) /
+                    decimal_point;
             }
             break;
         default:

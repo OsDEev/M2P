@@ -1881,8 +1881,12 @@ u32 GXEndDisplayList(void)
 
 void GXCallDisplayList(void* list, u32 nbytes)
 {
-    (void) list;
-    (void) nbytes;
+    // Static PObj geometry arrives as prebuilt GX command streams;
+    // execute them through the HAL vertex assembler (see gx_hal.c).
+    // (Nothing in the game records lists at runtime, so the record path
+    // stays a no-op.)
+    if (list && nbytes >= 3)
+        hal_execute_display_list((const u8*) list, nbytes);
 }
 
 // ================================================================ GXDraw (shapes)
