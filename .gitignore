@@ -141,6 +141,13 @@ __pycache__
 
 # CMake
 cmake-build-*/
+build_pc/
+out-pc/
+
+# PC port runtime files
+melee_pc.ini
+melee_card_*.mci
+*.mci
 
 # Mongo Explorer plugin
 .idea/**/mongoSettings.xml
