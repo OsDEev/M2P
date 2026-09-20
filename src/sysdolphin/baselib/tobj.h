@@ -276,6 +276,14 @@ void HSD_TObjAnimAll(HSD_TObj* tobj);
 HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td);
 HSD_Tlut* HSD_TlutLoadDesc(HSD_TlutDesc* tlutdesc);
 HSD_TObjTev* HSD_TObjTevLoadDesc(HSD_TObjTevDesc* tevdesc);
+
+// PC port (Stage 2) additions: Host-order variants for runtime-built
+// descs (no endian conversion), plus file->heap ImageDesc helpers.
+HSD_TObj* HSD_TObjLoadDescHost(HSD_TObjDesc* td);
+HSD_Tlut* HSD_TlutLoadDescHost(HSD_TlutDesc* tlutdesc);
+HSD_TObjTev* HSD_TObjTevLoadDescHost(HSD_TObjTevDesc* tevdesc);
+void HSD_ImageDescCopyDesc(HSD_ImageDesc* dst, const HSD_ImageDesc* src);
+HSD_ImageDesc** HSD_ImageTblDupDesc(HSD_ImageDesc** tbl, u16 n_imagetbl);
 HSD_TObj* _HSD_TObjGetCurrentByType(HSD_TObj* from, u32 mapping);
 
 void HSD_TObjRemove(HSD_TObj* tobj);

@@ -12,6 +12,7 @@
 #include "tev.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
+#include <pc/pc_endian.h> // Stage 2: file data is big-endian
 
 #define FLT_EPSILON 1.00000001335e-10F
 
@@ -23,6 +24,73 @@ HSD_TObjInfo hsdTObj = { TObjInfoInit };
 static HSD_TObjInfo* default_class = NULL;
 
 HSD_TObj* tobj_head;
+
+// ---- Stage 2 (PC port) endian helpers ----
+// File ImageDescs/TexLODDescs are big-endian; heap/runtime copies are
+// converted once here so every downstream reader stays native.
+
+static HSD_TexLODDesc* lod_dup_be(const HSD_TexLODDesc* src)
+{
+    HSD_TexLODDesc* dst;
+    if (src == NULL) {
+        return NULL;
+    }
+    dst = hsdAllocMemPiece(sizeof(HSD_TexLODDesc));
+    if (dst == NULL) {
+        return NULL;
+    }
+    dst->minFilt = (GXTexFilter) pc_rb32(&src->minFilt);
+    dst->LODBias = pc_rf32(&src->LODBias);
+    dst->bias_clamp = src->bias_clamp;
+    dst->edgeLODEnable = src->edgeLODEnable;
+    dst->max_anisotropy = (GXAnisotropy) pc_rb32(&src->max_anisotropy);
+    return dst;
+}
+
+// Copies a big-endian file ImageDesc into a host-order struct (the image
+// bytes themselves stay big-endian: the GX decoder reads them raw).
+// Declared in tobj.h for file->heap crossings (lbrefract, granime).
+void HSD_ImageDescCopyDesc(HSD_ImageDesc* dst, const HSD_ImageDesc* src)
+{
+    if (dst == NULL || src == NULL) {
+        return;
+    }
+    dst->image_ptr = src->image_ptr; // relocated pointer: native already
+    dst->width = pc_rb16(&src->width);
+    dst->height = pc_rb16(&src->height);
+    dst->format = (GXTexFmt) pc_rb32(&src->format);
+    dst->mipmap = pc_rb32(&src->mipmap);
+    dst->minLOD = pc_rf32(&src->minLOD);
+    dst->maxLOD = pc_rf32(&src->maxLOD);
+}
+
+// Duplicates a file imagetbl (n_imagetbl entries) into heap-native descs.
+// Declared in tobj.h; used where tables cross from file to runtime.
+HSD_ImageDesc** HSD_ImageTblDupDesc(HSD_ImageDesc** tbl, u16 n_imagetbl)
+{
+    HSD_ImageDesc** out;
+    u16 i;
+    if (tbl == NULL) {
+        return NULL;
+    }
+    out = hsdAllocMemPiece(sizeof(HSD_ImageDesc*) * (n_imagetbl + 1));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n_imagetbl; i++) {
+        if (tbl[i] == NULL) {
+            out[i] = NULL;
+        } else {
+            out[i] = HSD_ImageDescAlloc();
+            if (out[i] == NULL) {
+                return NULL;
+            }
+            HSD_ImageDescCopyDesc(out[i], tbl[i]);
+        }
+    }
+    out[n_imagetbl] = NULL;
+    return out;
+}
 
 void HSD_TObjRemoveAnim(HSD_TObj* tobj)
 {
@@ -49,7 +117,8 @@ static HSD_TexAnim* lookupTextureAnim(s32 id, HSD_TexAnim* texanim)
 {
     HSD_TexAnim* ta;
     for (ta = texanim; ta; ta = ta->next) {
-        if (ta->id == (GXTexMapID) id) {
+        // Stage 2: TexAnim nodes live in file memory (big-endian id).
+        if ((s32) pc_rb32(&ta->id) == id) {
             return ta;
         }
     }
@@ -63,11 +132,14 @@ void HSD_TObjAddAnim(HSD_TObj* tobj, HSD_TexAnim* texanim)
 
     if (tobj != NULL) {
         if ((ta = lookupTextureAnim(tobj->id, texanim)) != NULL) {
+            u16 n_tluttbl;
             if (tobj->aobj != NULL) {
                 HSD_AObjRemove(tobj->aobj);
             }
             tobj->aobj = HSD_AObjLoadDesc(ta->aobjdesc);
-            tobj->imagetbl = ta->imagetbl;
+            // Stage 2: file imagetbl -> heap-native duplicate table.
+            tobj->imagetbl =
+                HSD_ImageTblDupDesc(ta->imagetbl, pc_rb16(&ta->n_imagetbl));
 
             if (tobj->tluttbl != NULL) {
                 for (i = 0; tobj->tluttbl[i]; i++) {
@@ -76,10 +148,12 @@ void HSD_TObjAddAnim(HSD_TObj* tobj, HSD_TexAnim* texanim)
                 HSD_Free(tobj->tluttbl);
             }
 
-            if (ta->n_tluttbl) {
+            // Stage 2: count lives in file memory (big-endian u16).
+            n_tluttbl = pc_rb16(&ta->n_tluttbl);
+            if (n_tluttbl) {
                 tobj->tluttbl = HSD_MemAlloc((s32) sizeof(HSD_Tlut*) *
-                                             (ta->n_tluttbl + 1));
-                for (i = 0; i < ta->n_tluttbl; i++) {
+                                             (n_tluttbl + 1));
+                for (i = 0; i < n_tluttbl; i++) {
                     tobj->tluttbl[i] = HSD_TlutLoadDesc(ta->tluttbl[i]);
                 }
                 tobj->tluttbl[i] = NULL;
@@ -248,15 +322,58 @@ void HSD_TObjAnimAll(HSD_TObj* tobj)
     }
 }
 
+// Stage 2 (PC port): td points into file memory (big-endian). Scalars
+// convert on copy; pointed ImageDesc/LOD normalize into heap copies;
+// the image bytes themselves stay big-endian (the GX decoder is raw).
 static int TObjLoad(HSD_TObj* tobj, HSD_TObjDesc* td)
 {
     tobj->next = HSD_TObjLoadDesc(td->next);
+    tobj->id = (GXTexMapID) pc_rb32(&td->id);
+    tobj->src = (GXTexGenSrc) pc_rb32(&td->src);
+    tobj->mtxid = GX_IDENTITY;
+    tobj->rotate.x = pc_rf32(&td->rotate.x);
+    tobj->rotate.y = pc_rf32(&td->rotate.y);
+    tobj->rotate.z = pc_rf32(&td->rotate.z);
+    tobj->scale.x = pc_rf32(&td->scale.x);
+    tobj->scale.y = pc_rf32(&td->scale.y);
+    tobj->scale.z = pc_rf32(&td->scale.z);
+    tobj->translate.x = pc_rf32(&td->translate.x);
+    tobj->translate.y = pc_rf32(&td->translate.y);
+    tobj->translate.z = pc_rf32(&td->translate.z);
+    tobj->wrap_s = (GXTexWrapMode) pc_rb32(&td->wrap_s);
+    tobj->wrap_t = (GXTexWrapMode) pc_rb32(&td->wrap_t);
+    tobj->repeat_s = td->repeat_s;
+    tobj->repeat_t = td->repeat_t;
+    tobj->flags = pc_rb32(&td->blend_flags);
+    tobj->blending = pc_rf32(&td->blending);
+    tobj->magFilt = (GXTexFilter) pc_rb32(&td->magFilt);
+    if (td->imagedesc != NULL) {
+        tobj->imagedesc = HSD_ImageDescAlloc();
+        if (tobj->imagedesc != NULL) {
+            HSD_ImageDescCopyDesc(tobj->imagedesc, td->imagedesc);
+        }
+    } else {
+        tobj->imagedesc = NULL;
+    }
+    tobj->tlut = HSD_TlutLoadDesc(td->tlutdesc);
+    tobj->lod = lod_dup_be(td->lod);
+    tobj->aobj = NULL;
+    tobj->flags |= TEX_MTX_DIRTY;
+    tobj->tlut_no = (u8) -1;
+    tobj->tev = HSD_TObjTevLoadDesc(td->tev);
+
+    return 0;
+}
+
+// Host-order variant: td is a runtime-built desc (statics, stack, EFB
+// paths). Copies natively, no conversion. Declared in tobj.h.
+static int TObjLoadHost(HSD_TObj* tobj, HSD_TObjDesc* td)
+{
+    tobj->next = HSD_TObjLoadDescHost(td->next);
     tobj->id = td->id;
     tobj->src = td->src;
     tobj->mtxid = GX_IDENTITY;
-    tobj->rotate.x = td->rotate.x;
-    tobj->rotate.y = td->rotate.y;
-    tobj->rotate.z = td->rotate.z;
+    tobj->rotate = td->rotate;
     tobj->scale = td->scale;
     tobj->translate = td->translate;
     tobj->wrap_s = td->wrap_s;
@@ -267,12 +384,12 @@ static int TObjLoad(HSD_TObj* tobj, HSD_TObjDesc* td)
     tobj->blending = td->blending;
     tobj->magFilt = td->magFilt;
     tobj->imagedesc = td->imagedesc;
-    tobj->tlut = HSD_TlutLoadDesc(td->tlutdesc);
+    tobj->tlut = HSD_TlutLoadDescHost(td->tlutdesc);
     tobj->lod = td->lod;
     tobj->aobj = NULL;
     tobj->flags |= TEX_MTX_DIRTY;
     tobj->tlut_no = (u8) -1;
-    tobj->tev = HSD_TObjTevLoadDesc(td->tev);
+    tobj->tev = HSD_TObjTevLoadDescHost(td->tev);
 
     return 0;
 }
@@ -296,7 +413,42 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
     }
 }
 
+// Host-order variant of HSD_TObjLoadDesc (Stage 2, declared in tobj.h).
+HSD_TObj* HSD_TObjLoadDescHost(HSD_TObjDesc* td)
+{
+    if (td != NULL) {
+        HSD_TObj* tobj;
+        HSD_ClassInfo* info;
+
+        if (!td->class_name || !(info = hsdSearchClassInfo(td->class_name))) {
+            tobj = HSD_TObjAlloc();
+        } else {
+            tobj = hsdNew(info);
+            HSD_ASSERT(468, tobj);
+        }
+        TObjLoadHost(tobj, td);
+        return tobj;
+    } else {
+        return NULL;
+    }
+}
+
 HSD_Tlut* HSD_TlutLoadDesc(HSD_TlutDesc* tlutdesc)
+{
+    if (tlutdesc != NULL) {
+        HSD_Tlut* tlut = HSD_TlutAlloc();
+        tlut->lut = tlutdesc->lut;
+        // Stage 2: file scalars convert on copy.
+        tlut->fmt = (GXTlutFmt) pc_rb32(&tlutdesc->fmt);
+        tlut->tlut_name = pc_rb32(&tlutdesc->tlut_name);
+        tlut->n_entries = pc_rb16(&tlutdesc->n_entries);
+        return tlut;
+    }
+    return NULL;
+}
+
+// Host-order variant (Stage 2): plain copy, no conversion.
+HSD_Tlut* HSD_TlutLoadDescHost(HSD_TlutDesc* tlutdesc)
 {
     if (tlutdesc != NULL) {
         HSD_Tlut* tlut = HSD_TlutAlloc();
@@ -307,6 +459,20 @@ HSD_Tlut* HSD_TlutLoadDesc(HSD_TlutDesc* tlutdesc)
 }
 
 HSD_TObjTev* HSD_TObjTevLoadDesc(HSD_TObjTevDesc* tevdesc)
+{
+    if (tevdesc != NULL) {
+        HSD_TObjTev* new = HSD_TObjTevAlloc();
+        memcpy(new, tevdesc, sizeof(HSD_TObjTev));
+        // Stage 2: only multi-byte scalar needs conversion (GXColor and
+        // the u8 opcode fields are bytewise).
+        new->active = pc_rb32(&tevdesc->active);
+        return new;
+    }
+    return NULL;
+}
+
+// Host-order variant (Stage 2): plain copy, no conversion.
+HSD_TObjTev* HSD_TObjTevLoadDescHost(HSD_TObjTevDesc* tevdesc)
 {
     if (tevdesc != NULL) {
         HSD_TObjTev* new = HSD_TObjTevAlloc();
