@@ -451,7 +451,8 @@ void HSD_MObjSetToonTextureImage(HSD_ImageDesc* imagedesc)
 {
     if (tobj_toon == NULL) {
         tobj_toon_desc.imagedesc = imagedesc;
-        tobj_toon = HSD_TObjLoadDesc(&tobj_toon_desc);
+        // Stage 2: static host-order desc (no conversion).
+        tobj_toon = HSD_TObjLoadDescHost(&tobj_toon_desc);
         HSD_ASSERTREPORT(0x2F8, tobj_toon, "cannot allocate tobj for toon.");
     }
     tobj_toon->imagedesc = imagedesc;

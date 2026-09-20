@@ -9,6 +9,7 @@
 #include "grmaterial.h"
 #include "ground.h"
 #include "inlines.h"
+#include <pc/pc_endian.h> // Stage 2: TexAnim nodes are big-endian
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbheap.h>
@@ -111,7 +112,8 @@ void grAnime_801C6620(HSD_PObj* arg0, HSD_ShapeAnim* arg1)
 static inline HSD_TexAnim* HSD_TexAnimFindById(HSD_TexAnim* cur, int id)
 {
     while (cur != NULL) {
-        if ((signed) cur->id == id) {
+        // Stage 2: file TexAnim id is big-endian.
+        if ((s32) pc_rb32(&cur->id) == id) {
             return cur;
         }
         cur = cur->next;
@@ -130,7 +132,9 @@ void grAnime_801C6710(HSD_TObj* tobj, HSD_TexAnim* texanim)
             HSD_AObjRemove(tobj->aobj);
         }
         tobj->aobj = HSD_AObjLoadDesc(texanim->aobjdesc);
-        tobj->imagetbl = texanim->imagetbl;
+        // Stage 2: file imagetbl -> heap-native duplicate table.
+        tobj->imagetbl = HSD_ImageTblDupDesc(texanim->imagetbl,
+                                            pc_rb16(&texanim->n_imagetbl));
     }
 }
 
