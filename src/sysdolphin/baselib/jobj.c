@@ -16,6 +16,7 @@
 #include "robj.h"
 #include "spline.h"
 #include <dolphin/mtx.h>
+#include <pc/pc_endian.h> // Stage 2: HSD_Joint descs are big-endian
 
 void JObjInfoInit(void);
 HSD_JObjInfo hsdJObj = { JObjInfoInit };
@@ -59,11 +60,16 @@ void JObjResetRST(HSD_JObj* jobj, HSD_Joint* joint)
     if (jobj == NULL || joint == NULL) {
         return;
     }
-    jobj->rotate.x = joint->rotation.x;
-    jobj->rotate.y = joint->rotation.y;
-    jobj->rotate.z = joint->rotation.z;
-    jobj->scale = joint->scale;
-    jobj->translate = joint->position;
+    // Stage 2: joint floats are big-endian file data.
+    jobj->rotate.x = pc_rf32(&joint->rotation.x);
+    jobj->rotate.y = pc_rf32(&joint->rotation.y);
+    jobj->rotate.z = pc_rf32(&joint->rotation.z);
+    jobj->scale.x = pc_rf32(&joint->scale.x);
+    jobj->scale.y = pc_rf32(&joint->scale.y);
+    jobj->scale.z = pc_rf32(&joint->scale.z);
+    jobj->translate.x = pc_rf32(&joint->position.x);
+    jobj->translate.y = pc_rf32(&joint->position.y);
+    jobj->translate.z = pc_rf32(&joint->position.z);
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         HSD_JObjSetMtxDirty(jobj);
     }
@@ -633,7 +639,8 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     }
     jobj->next = JObjLoadJointSub(joint->next, parent);
     jobj->parent = parent;
-    jobj->flags |= joint->flags;
+    // Stage 2: joint scalars are big-endian file data.
+    jobj->flags |= pc_rb32(&joint->flags);
     if (union_type_spline(jobj)) {
         jobj->u.spline = joint->u.spline;
     } else if (union_type_ptcl(jobj)) {
@@ -648,16 +655,28 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
         jobj->u.dobj = HSD_DObjLoadDesc(joint->u.dobjdesc);
     }
     jobj->robj = HSD_RObjLoadDesc(joint->robjdesc);
-    jobj->rotate.x = joint->rotation.x;
-    jobj->rotate.y = joint->rotation.y;
-    jobj->rotate.z = joint->rotation.z;
-    jobj->scale = joint->scale;
-    jobj->translate = joint->position;
+    jobj->rotate.x = pc_rf32(&joint->rotation.x);
+    jobj->rotate.y = pc_rf32(&joint->rotation.y);
+    jobj->rotate.z = pc_rf32(&joint->rotation.z);
+    jobj->scale.x = pc_rf32(&joint->scale.x);
+    jobj->scale.y = pc_rf32(&joint->scale.y);
+    jobj->scale.z = pc_rf32(&joint->scale.z);
+    jobj->translate.x = pc_rf32(&joint->position.x);
+    jobj->translate.y = pc_rf32(&joint->position.y);
+    jobj->translate.z = pc_rf32(&joint->position.z);
     PSMTXIdentity(jobj->mtx);
     jobj->scl = NULL;
     if (joint->mtx != NULL) {
+        int r, c;
         jobj->envelopemtx = HSD_MtxAlloc();
         memcpy(jobj->envelopemtx, joint->mtx, sizeof(Mtx));
+        // Stage 2: envelope matrix floats are big-endian.
+        for (r = 0; r < 3; r++) {
+            for (c = 0; c < 4; c++) {
+                (*jobj->envelopemtx)[r][c] =
+                    pc_swapf((*jobj->envelopemtx)[r][c]);
+            }
+        }
     }
     HSD_IDInsertToTable(NULL, (HSD_IDKey) joint, jobj);
     jobj->id = (HSD_IDKey) joint;

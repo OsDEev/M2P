@@ -4,6 +4,7 @@
 
 #include "debug.h"
 #include "spline.h"
+#include <pc/pc_endian.h> // Stage 2: FObj descs are big-endian
 
 HSD_ObjAllocData fobj_alloc_data;
 
@@ -470,12 +471,14 @@ HSD_FObj* HSD_FObjLoadDesc(HSD_FObjDesc* desc)
     if (desc != NULL) {
         HSD_FObj* fobj = HSD_FObjAlloc();
         fobj->next = HSD_FObjLoadDesc(desc->next);
-        fobj->startframe = desc->startframe;
+        // Stage 2: desc scalars are big-endian file data (the track
+        // bytecode itself parses byte-wise and needs no conversion).
+        fobj->startframe = pc_rf32(&desc->startframe);
         fobj->obj_type = desc->type;
         fobj->frac_value = desc->frac_value;
         fobj->frac_slope = desc->frac_slope;
         fobj->ad_head = desc->ad;
-        fobj->length = desc->length;
+        fobj->length = pc_rb32(&desc->length);
         fobj->flags = 0;
         return fobj;
     }

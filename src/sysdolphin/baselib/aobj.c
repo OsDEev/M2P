@@ -12,6 +12,7 @@
 #include "jobj.h"
 #include "list.h"
 #include "lobj.h"
+#include <pc/pc_endian.h> // Stage 2: AObj descs are big-endian
 #include "mobj.h"
 #include "pobj.h"
 #include "robj.h"
@@ -189,9 +190,11 @@ HSD_AObj* HSD_AObjLoadDesc(HSD_AObjDesc* aobjdesc)
 
     if (aobjdesc != NULL) {
         aobj = HSD_AObjAlloc();
-        HSD_AObjSetFlags(aobj, aobjdesc->flags);
+        // Stage 2: file scalars are big-endian (obj_id is a relocated
+        // pointer and reads natively).
+        HSD_AObjSetFlags(aobj, pc_rb32(&aobjdesc->flags));
         HSD_AObjSetRewindFrame(aobj, 0.0F);
-        HSD_AObjSetEndFrame(aobj, aobjdesc->end_frame);
+        HSD_AObjSetEndFrame(aobj, pc_rf32(&aobjdesc->end_frame));
         fobjdesc = aobjdesc->fobjdesc;
         fobj = HSD_FObjLoadDesc(fobjdesc);
         HSD_AObjSetFObj(aobj, fobj);
