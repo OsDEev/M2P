@@ -1,0 +1,48 @@
+name: pc-port
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.os }} (${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            compiler: msvc
+            configure_flags: ""
+          - os: windows-latest
+            compiler: no-imgui
+            configure_flags: "-DMELEE_WANT_IMGUI=OFF"
+          - os: ubuntu-latest
+            compiler: gcc
+            configure_flags: ""
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Install Linux deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libgl1-mesa-dev \
+          libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+    - name: Configure
+      run: >
+        cmake -S . -B build_pc -DCMAKE_BUILD_TYPE=Release
+        ${{ matrix.configure_flags }}
+
+    - name: Build
+      run: cmake --build build_pc --config Release --parallel
+
+    - name: Smoke test (--help)
+      # --help exits before video init, so no display is needed.
+      run: ./build_pc/bin/melee_pc --help
+      shell: bash

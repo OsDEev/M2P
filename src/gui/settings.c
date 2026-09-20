@@ -26,7 +26,9 @@
 #include <sys/types.h>
 #endif
 
-// key names must match HalKeyId order in hal_input.h
+// Key names must match HalKeyId order in hal_input.h, and the default
+// codes below must match hal_input_init()'s map (settings.c owns no
+// dependency on hal_input, so keep the two tables in sync by hand).
 static const char* s_key_ids[MELEE_KEY_SLOTS] = {
     "stick_up", "stick_down", "stick_left", "stick_right", "c_up",
     "c_down",   "c_left",     "c_right",    "a",            "b",
