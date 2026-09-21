@@ -51,6 +51,15 @@ u32 sdk2_ar_size(void)
     return ARAM_SIZE;
 }
 
+// MRAM-vs-ARAM classification for lbmemory/lbfile/ftdata. ARAM is always
+// the 0..16MB window; everything else (arena >= LOWMEM_FLOOR, BSS,
+// stack) is MRAM by role. Replaces the retail `< 0x80000000` test,
+// which is meaningless once the arena no longer starts at 0x80000000.
+int sdk2_addr_is_aram(u32 addr)
+{
+    return addr < ARAM_SIZE;
+}
+
 static void* mram_ptr(u32 v, u32 len, const char* what)
 {
     void* p = (void*) (uintptr_t) v;

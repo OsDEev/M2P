@@ -7,6 +7,7 @@
 #include "lbdvd.h"
 #include "lbheap.h"
 #include "lblanguage.h"
+#include <sdk2/sdk2.h> // Stage 2: MRAM/ARAM classification
 #include <dolphin/dvd.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/devcom.h>
@@ -124,7 +125,8 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
 {
     int type;
     *size = lbFile_8001634C(file);
-    type = (dst >= 0x80000000) ? 0x21 : 0x23;
+    // Stage 2: 0x21 = MRAM dest, 0x23 = ARAM dest (was `>= 0x80000000`).
+    type = sdk2_addr_is_aram((u32) dst) ? 0x23 : 0x21;
     HSD_DevComRequest(file, 0, dst, ROUND_UP_32(*size), type, pri, callback,
                       args);
 }

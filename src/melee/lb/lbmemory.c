@@ -6,6 +6,7 @@
 
 #include <dolphin/ar.h>
 #include <dolphin/os/OSAlarm.h>
+#include <sdk2/sdk2.h> // Stage 2: MRAM/ARAM classification
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/devcom.h>
 
@@ -65,7 +66,10 @@ Handle* lbMemory_80014E24(void* arenaLo, void* arenaHi)
     Handle* h;
     HSD_ASSERT(0x7B, _p(free_heap));
 
-    if (((u32) arenaLo < 0x80000000U) && ((u32) arenaHi < 0x80000000U)) {
+    // Stage 2: ARAM is the 0..16MB window; the arena never aliases it
+    // (LOWMEM_FLOOR), so test the range instead of `< 0x80000000`.
+    if (sdk2_addr_is_aram((u32) (uintptr_t) arenaLo) &&
+        sdk2_addr_is_aram((u32) (uintptr_t) arenaHi)) {
         HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
     }
 
@@ -273,7 +277,7 @@ static void lbMemory_80015320(int arg0, uintptr_t _handle, void* arg2,
             *currentp = (void*) ((u32) handle->x4_lo + (u32) handle->x8_hi);
             copy_src = null_or_old;
 
-            if ((u32) handle->x4_lo < 0x80000000U) {
+            if (sdk2_addr_is_aram((u32) (uintptr_t) handle->x4_lo)) {
                 HSD_DevComRequest(
                     0, (u32) copy_src, current, OSRoundUp32B(handle->x8_hi),
                     0x1B, 1, lbMemory_80015320, (uintptr_t) handle->x0_next);

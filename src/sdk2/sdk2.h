@@ -37,6 +37,9 @@ unsigned sdk2_mem_size_mb(void);
 void sdk2_addr_register(u32 gc_addr, void* host, u32 size);
 void* sdk2_addr_host(u32 gc_addr);
 void sdk2_addr_unregister(u32 gc_addr);
+// MRAM-vs-ARAM test (addr < 16MB -> ARAM, else MRAM); replaces retail
+// `< 0x80000000` checks in lbmemory/lbfile/ftdata.
+int sdk2_addr_is_aram(u32 addr);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,13 @@
-# Melee PC port build.
+# Melee PC port build (32-bit x86).
 #
-#   cmake -S . -B build_pc -DCMAKE_BUILD_TYPE=Release
+# The port MUST be built as 32-bit: game file structs assume 4-byte
+# pointers (GameCube layout), so on x86-64 every field after the first
+# pointer sits at the wrong offset. Endianness is fixed separately
+# (Stage 2, src/pc/pc_endian.h); pointer width is fixed by the target.
+#
+#   Windows: cmake -S . -B build_pc -A Win32
+#   Linux:   cmake -S . -B build_pc -DCMAKE_BUILD_TYPE=Release  (adds -m32;
+#            needs gcc-multilib/g++-multilib and i386 GL/X11 dev packages)
 #   cmake --build build_pc --config Release
 #
 # Needs: a C99/C++17 toolchain, system OpenGL, network access on the first
@@ -10,6 +17,27 @@
 # Run: build_pc/bin/melee_pc --disc <GALE01 root> [--configure|--help]
 cmake_minimum_required(VERSION 3.20)
 project(melee_pc_port LANGUAGES C CXX)
+
+# ---------------------------------------------------------------- 32-bit only
+# GameCube pointers are 4 bytes; a 64-bit build silently shifts every
+# struct field that follows a pointer. Fail fast with instructions.
+if(APPLE)
+    message(FATAL_ERROR "[melee] macOS cannot target 32-bit x86; "
+        "Windows (MSVC -A Win32) or Linux (GCC -m32) required.")
+endif()
+if(MSVC)
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+        message(FATAL_ERROR "[melee] MSVC build must target Win32 "
+            "(4-byte pointers, like the GameCube): re-configure with "
+            "`cmake -A Win32 ...`.")
+    endif()
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES
+        "^(x86_64|AMD64|x64)$")
+    message(STATUS "[melee] 64-bit host compiler: adding -m32 for a "
+        "32-bit target (needs multilib).")
+    add_compile_options(-m32)
+    add_link_options(-m32)
+endif()
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -108,14 +136,10 @@ else()
         -Wno-implicit-function-declaration)
 endif()
 
-# Low image base: the game funnels some pointers through u32 and tells
-# MRAM apart from ARAM with `< 0x80000000`, so static + arena memory must
-# live in the low 4 GB (see src/sdk2/sdk2_lowmem.*).
-if(MSVC)
-    add_link_options(/BASE:0x1000000 /DYNAMICBASE:NO)
-elseif(MELEE_PLATFORM_LINUX)
-    add_link_options(-no-pie)
-endif()
+# NOTE: no low-image-base tricks needed. The build is 32-bit, so every
+# pointer fits u32 losslessly under ASLR/PIE; MRAM-vs-ARAM is decided by
+# range (sdk2_addr_is_aram), and the arena has a 32 MB floor
+# (see src/sdk2/sdk2_lowmem.*).
 
 # ---------------------------------------------------------------- HAL
 file(GLOB HAL_SOURCES CONFIGURE_DEPENDS src/hal/opengl/*.c)
@@ -239,5 +263,10 @@ install(TARGETS melee_pc RUNTIME DESTINATION bin)
 
 message(STATUS "[melee] platform : ${CMAKE_SYSTEM_NAME}")
 message(STATUS "[melee] build type: ${CMAKE_BUILD_TYPE}")
+# NOTE: CMAKE_SIZEOF_VOID_P is probed before -m32 is appended, so on a
+# 64-bit Linux host it still reads 8 here; the actual game objects are
+# compiled with -m32 (4-byte pointers, verified by the build itself).
+message(STATUS "[melee] host void*: ${CMAKE_SIZEOF_VOID_P} bytes "
+    "(target is always 32-bit x86)")
 message(STATUS "[melee] ImGui GUI : ${MELEE_HAVE_IMGUI}")
 message(STATUS "[melee] game lib  : ${MELEE_BUILD_GAME}")

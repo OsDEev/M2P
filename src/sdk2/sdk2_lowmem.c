@@ -50,6 +50,15 @@ static void low_untrack(void* p)
 }
 #endif
 
+// Regions below LOWMEM_FLOOR are refused: MRAM must never alias the
+// ARAM window (< 16 MB), or the addr<16MB -> ARAM classification used
+// by lbmemory/lbfile/ftdata breaks. NULL means "fail fast at the call
+// site", never a silent low alias.
+static int below_floor(const void* p)
+{
+    return p != NULL && (uintptr_t) p < (uintptr_t) LOWMEM_FLOOR;
+}
+
 void* sdk2_low_alloc(size_t size)
 {
     void* p = NULL;
@@ -59,8 +68,7 @@ void* sdk2_low_alloc(size_t size)
     size = (size + 0xFFFFu) & ~(size_t) 0xFFFFu;
 #ifdef _WIN32
     {
-        // 0x80000000 first: mimics the retail MRAM window so the game's
-        // `< 0x80000000` MRAM/ARAM checks classify correctly.
+        // 0x80000000 first: mimics the retail MRAM window.
         static uintptr_t hints[] = { 0x80000000u, 0x88000000u,
                                      0x90000000u, 0xA0000000u,
                                      0x20000000u, 0x30000000u };
@@ -68,12 +76,21 @@ void* sdk2_low_alloc(size_t size)
         for (i = 0; i < sizeof(hints) / sizeof(hints[0]); i++) {
             p = VirtualAlloc((LPVOID) hints[i], size,
                              MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (p)
+            if (p != NULL) {
+                if (below_floor(p)) {
+                    VirtualFree(p, 0, MEM_RELEASE);
+                    continue;
+                }
                 return p;
+            }
         }
-        // Last resort: any address (high memory; ARQ will refuse it).
+        // Last resort: any address, still honoring the floor.
         p = VirtualAlloc(NULL, size, MEM_RESERVE | MEM_COMMIT,
                          PAGE_READWRITE);
+        if (below_floor(p)) {
+            VirtualFree(p, 0, MEM_RELEASE);
+            return NULL;
+        }
         return p;
     }
 #elif defined(__linux__) && defined(__x86_64__)
@@ -82,7 +99,7 @@ void* sdk2_low_alloc(size_t size)
              MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
     if (p != MAP_FAILED) {
         low_track(p);
-        return p;
+        return p; // fixed hint is always above the floor
     }
     p = NULL;
 #endif
@@ -90,14 +107,27 @@ void* sdk2_low_alloc(size_t size)
              MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
     if (p == MAP_FAILED)
         p = NULL;
-    if (p) {
+    if (p != NULL) {
+        if (below_floor(p)) {
+            munmap(p, size);
+            return NULL;
+        }
         low_track(p);
         return p;
     }
-    return malloc(size);
+    p = malloc(size);
+    if (below_floor(p)) {
+        free(p);
+        return NULL;
+    }
+    return p;
 #else
-    (void) size;
-    return malloc(size);
+    p = malloc(size);
+    if (below_floor(p)) {
+        free(p);
+        return NULL;
+    }
+    return p;
 #endif
 }
 
