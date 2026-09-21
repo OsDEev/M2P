@@ -45,7 +45,22 @@ jobs:
         ${{ matrix.configure_flags }}
 
     - name: Build
-      run: cmake --build build_pc --config Release --parallel
+      # NOTE: --parallel is bounded (unbounded -j OOM-kills 32-bit cc1
+      # jobs on hosted runners). The log is kept so failures can dump
+      # errors into the step summary below.
+      run: |
+        cmake --build build_pc --config Release --parallel 4 2>&1 | tee build_pc/build.log
+        exit ${PIPESTATUS[0]}
+      shell: bash
+
+    - name: Build errors (summary)
+      if: failure()
+      run: |
+        echo '## Build errors (first 30)' >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        grep -E -i -m 30 'error|undefined reference' build_pc/build.log >> "$GITHUB_STEP_SUMMARY" || true
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+      shell: bash
 
     - name: Smoke test (--help)
       # --help exits before video init, so no display is needed.
