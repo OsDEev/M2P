@@ -7,6 +7,7 @@
 #include <dolphin/gx/GXTexture.h>
 #include <dolphin/os.h>
 #include <dolphin/thp/thp.h>
+#include <pc/pc_endian.h> // Stage 2: THP file data is big-endian
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/devcom.h>
 #include <sysdolphin/baselib/memory.h>
@@ -117,8 +118,9 @@ static void fn_8001E910(int arg0, uintptr_t arg1, void* arg2, bool cancelflag)
     } else {
         var_r0 = streamPlayer->unk_8C - 1;
     }
-    streamPlayer->currPackedSize =
-        streamPlayer->frame_buffers[var_r0]->next_packed_size;
+    // Stage 2: frame size prefix is a big-endian file dword.
+    streamPlayer->currPackedSize = pc_rb32(
+        &streamPlayer->frame_buffers[var_r0]->next_packed_size);
     if (streamPlayer->unk_90 != streamPlayer->unk_8C &&
         streamPlayer->unk_70 != 0)
     {
@@ -167,6 +169,15 @@ static s32 fn_8001EB14(THPDecComp* data, const char* path)
     THPInit();
     data->file_entrynum = DVDConvertPathToEntrynum(path);
     lbFile_800161C4(data->file_entrynum, 0, (uintptr_t) data, 0x40, 0x21, 1);
+    // Stage 2: the 0x40-byte file header just DMA'd in is big-endian.
+    // Normalize the 9 dwords the player reads natively (magic untouched).
+    {
+        u32* hdr = (u32*) ((u8*) data + 0x08);
+        int i;
+        for (i = 0; i < 9; i++) {
+            hdr[i] = pc_rb32((const u8*) &hdr[i]);
+        }
+    }
 
     data->unk_40 = data->num_frames;
     data->width = data->x_size;
@@ -298,7 +309,8 @@ static void fn_8001ECF4(THPDecComp* data, void* buf)
                             0x21, 1);
             csizep = var_r29;
             data->curr_file_offset += var_r24;
-            var_r24 = ((THPFrameBuffer*) var_r29)->next_packed_size;
+            var_r24 =
+                pc_rb32(&((THPFrameBuffer*) var_r29)->next_packed_size);
             var_r29 = var_r29 + data->unk_100;
         }
         data->unk_74 = var_r25;
