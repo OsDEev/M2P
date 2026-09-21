@@ -47,6 +47,10 @@ elseif(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES
     endif()
 endif()
 
+# Port-wide feature flag (must be visible to every target: e.g. the
+# SDK os.h header switches bus-clock address macros to real variables).
+add_compile_definitions(MELEE_PC_PORT=1)
+
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
@@ -95,6 +99,9 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+# X11 only: Wayland backend needs wayland-scanner (often missing for
+# multilib/CI); XWayland covers Wayland desktops at runtime.
+set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
 # Dear ImGui (optional settings overlay).
