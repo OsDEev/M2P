@@ -51,7 +51,10 @@ endif()
 # SDK os.h header switches bus-clock address macros to real variables).
 add_compile_definitions(MELEE_PC_PORT=1)
 
-set(CMAKE_C_STANDARD 99)
+# C11 for _Static_assert (used by STATIC_ASSERT in game headers); the
+# decomp itself builds these headers with MWERKS, MSVC needs the mode
+# spelled out explicitly.
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
