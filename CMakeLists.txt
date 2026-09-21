@@ -39,6 +39,12 @@ elseif(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES
     add_compile_options(-m32)
     add_link_options(-m32)
     set(MELEE_USE_M32 ON)
+    if(UNIX AND NOT APPLE)
+        # find_*() calls otherwise keep probing the 64-bit multiarch
+        # tree (CMAKE_LIBRARY_ARCHITECTURE was detected pre-m32), so
+        # OpenGL/X11 resolve to unusable 64-bit libs or nothing at all.
+        set(CMAKE_LIBRARY_ARCHITECTURE i386-linux-gnu)
+    endif()
 endif()
 
 set(CMAKE_C_STANDARD 99)
