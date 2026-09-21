@@ -11,16 +11,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # NOTE: the port is 32-bit x86 (game structs assume 4-byte
+      # pointers), so Windows uses -A Win32 and Linux uses -m32 multilib.
       matrix:
         include:
           - os: windows-latest
             compiler: msvc
-            configure_flags: ""
+            configure_flags: "-A Win32"
           - os: windows-latest
             compiler: no-imgui
-            configure_flags: "-DMELEE_WANT_IMGUI=OFF"
+            configure_flags: "-A Win32 -DMELEE_WANT_IMGUI=OFF"
           - os: ubuntu-latest
-            compiler: gcc
+            compiler: gcc-m32
             configure_flags: ""
     steps:
     - name: Checkout
@@ -29,10 +31,12 @@ jobs:
     - name: Install Linux deps
       if: runner.os == 'Linux'
       run: |
+        sudo dpkg --add-architecture i386
         sudo apt-get update
-        sudo apt-get install -y \
-          libgl1-mesa-dev \
-          libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+        sudo apt-get install -y gcc-multilib g++-multilib \
+          libgl1-mesa-dev:i386 \
+          libx11-dev:i386 libxrandr-dev:i386 libxinerama-dev:i386 \
+          libxcursor-dev:i386 libxi-dev:i386
 
     - name: Configure
       run: >

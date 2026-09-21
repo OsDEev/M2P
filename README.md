@@ -21,15 +21,24 @@
 
 ### Требования
 
-- Windows 10+ (MSVC 2022) или Linux x86-64 (GCC 11+ / Clang 14+)
+- **Строго 32-bit x86**: структуры игровых файлов рассчитаны на 4-байтные
+  указатели (как на GameCube), поэтому 64-битная сборка невозможна
+  в принципе. Windows 10+ (MSVC 2022, `-A Win32`) или Linux x86-64
+  (GCC 11+ / Clang 14+ с multilib, добавляется `-m32`). macOS не
+  поддерживается (нет 32-bit).
 - CMake 3.20+, C99/C++17
 - Системный OpenGL
-- Linux: `libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev`
+- Linux: `gcc-multilib g++-multilib` + `libgl1-mesa-dev:i386
+  libx11-dev:i386 libxrandr-dev:i386 libxinerama-dev:i386
+  libxcursor-dev:i386 libxi-dev:i386` (после `dpkg --add-architecture i386`)
 - Интернет при первом configure (GLFW 3.4 и Dear ImGui тянутся через FetchContent)
 
 ### Сборка
 
 ```sh
+# Windows:
+cmake -S . -B build_pc -A Win32
+# Linux:
 cmake -S . -B build_pc -DCMAKE_BUILD_TYPE=Release
 cmake --build build_pc --config Release --parallel
 ```
@@ -131,7 +140,7 @@ HAL и SDK2 (проверено свипом: покрыты все ~470 SDK-в�
 ## Разработка
 
 - Ветки: `master` (здесь вся работа).
-- CI `.github/workflows/pc-port.yml`: Windows (MSVC, ±ImGui) + Linux (GCC).
+- CI `.github/workflows/pc-port.yml`: Windows (MSVC Win32, ±ImGui) + Linux (GCC -m32).
 - Верхнеуровневый decomp-флоу (`configure.py`, MWERKS) не тронут и
   продолжает работать как раньше.
 - Лицензия исходников декомпиляции — как в апстриме; новый код порта —
