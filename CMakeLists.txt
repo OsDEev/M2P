@@ -25,6 +25,7 @@ if(APPLE)
     message(FATAL_ERROR "[melee] macOS cannot target 32-bit x86; "
         "Windows (MSVC -A Win32) or Linux (GCC -m32) required.")
 endif()
+set(MELEE_USE_M32 OFF)
 if(MSVC)
     if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
         message(FATAL_ERROR "[melee] MSVC build must target Win32 "
@@ -37,6 +38,7 @@ elseif(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES
         "32-bit target (needs multilib).")
     add_compile_options(-m32)
     add_link_options(-m32)
+    set(MELEE_USE_M32 ON)
 endif()
 
 set(CMAKE_C_STANDARD 99)
@@ -62,6 +64,13 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # ---------------------------------------------------------------- deps
+if(MELEE_PLATFORM_LINUX AND MELEE_USE_M32)
+    # 32-bit Mesa ships libGL.so without the libOpenGL/libGLX GLVND
+    # split: use the legacy libGL target (already covered by the -dev
+    # packages in CI). We link only GL 1.1 entry points anyway; the rest
+    # is loaded at runtime by gl_loader.
+    set(OpenGL_GL_PREFERENCE LEGACY)
+endif()
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -188,7 +197,7 @@ endif()
 add_library(melee_gui STATIC ${GUI_SOURCES})
 target_include_directories(melee_gui PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${MELEE_INCLUDES}
 )
 if(MELEE_HAVE_IMGUI)
     target_link_libraries(melee_gui PUBLIC imgui glfw)

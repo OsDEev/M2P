@@ -139,6 +139,10 @@ typedef struct {
 #define PROGCACHE_N 16
 static ProgCacheEnt s_progcache[PROGCACHE_N];
 static int s_progcache_next;
+// Last used program (fast path in hal_get_program; declared up here so
+// gx_hal_shutdown() can reset it).
+static unsigned s_last_state_hash;
+static ProgCacheEnt* s_last_prog;
 
 static unsigned s_vao, s_vbo;
 static unsigned s_efb_fbo, s_efb_color, s_efb_depth;
@@ -1010,9 +1014,6 @@ static unsigned hal_state_hash(void)
 #undef MIX
     return h;
 }
-
-static unsigned s_last_state_hash;
-static ProgCacheEnt* s_last_prog;
 
 static ProgCacheEnt* hal_get_program(void)
 {

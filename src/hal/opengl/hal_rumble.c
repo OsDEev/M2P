@@ -22,6 +22,17 @@
 static int s_enabled = 1;
 static int s_last[RUMBLE_CHANS];
 
+// Forward declarations: backends live below, callers above (MSVC
+// requires a declaration before use even for file-local functions).
+static void rumble_backend_set(int chan, int on);
+#ifdef _WIN32
+void rumble_win_init(void);
+void rumble_win_shutdown(void);
+#endif
+#ifdef __linux__
+void rumble_evdev_shutdown(void);
+#endif
+
 void hal_rumble_init(void)
 {
     int i;
@@ -76,17 +87,6 @@ void hal_rumble_sync(int chan, unsigned motor_command, int present)
     s_last[chan] = want;
     rumble_backend_set(chan, want);
 }
-
-// ------------------------------------------------------------ backend glue
-// (implemented per platform below; no-op where unavailable)
-static void rumble_backend_set(int chan, int on);
-#ifdef _WIN32
-void rumble_win_init(void);
-void rumble_win_shutdown(void);
-#endif
-#ifdef __linux__
-void rumble_evdev_shutdown(void);
-#endif
 
 // ------------------------------------------------------------ Windows/XInput
 #ifdef _WIN32

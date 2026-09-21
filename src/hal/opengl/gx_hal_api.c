@@ -11,7 +11,7 @@
 #include "gx_hal_priv.h"
 #include "gl_loader.h"
 
-#include <dolphin/gx/gx.h>
+#include <dolphin/gx.h>
 #include <dolphin/os/OSThread.h>
 
 #include <math.h>
