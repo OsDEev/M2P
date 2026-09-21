@@ -2,6 +2,7 @@
 #include "sobjlib.h"
 
 #include <math.h>
+#include <string.h>
 
 #include "cobj.h"
 #include "gobj.h"
@@ -14,6 +15,7 @@
 #include "tobj.h"
 #include <dolphin/gx.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: image/tlut descs may be big-endian
 
 /* 004DB678 */ extern const f32 HSD_SObjLib_804DEA98;
 /* 004D4540 */ u8 HSD_SObjLib_804D7960;
@@ -158,6 +160,14 @@ HSD_SObj* HSD_SObjLib_803A477C(HSD_GObj* gobj, HSD_SObjDesc* desc,
     HSD_SObj* sobj;
     f32 inv_width;
     f32 inv_height;
+    // Stage 2 (PC port) snapshots: callers pass image/tlut descs that are
+    // either big-endian file data (disc archives) or host-native structs
+    // (runtime-built, e.g. the movie player). GX texture/TLUT format ids
+    // are always small (< 0x100), so exactly one endianness reads sane;
+    // normalize into these snapshots once and use them below.
+    HSD_ImageDesc image_n;
+    HSD_ImageDesc image2_n;
+    HSD_Tlut tlut_n;
 
     if (use_secondary) {
         image = desc->image;
@@ -167,6 +177,33 @@ HSD_SObj* HSD_SObjLib_803A477C(HSD_GObj* gobj, HSD_SObjDesc* desc,
         image = desc->image;
         image2 = NULL;
         tlut = desc->tlut;
+    }
+    if (image != NULL) {
+        u32 fmt_native;
+        memcpy(&fmt_native, &image->format, 4);
+        if (fmt_native > 0x3Fu) {
+            HSD_ImageDescCopyDesc(&image_n, image);
+            image = &image_n;
+        }
+    }
+    if (image2 != NULL) {
+        u32 fmt_native;
+        memcpy(&fmt_native, &image2->format, 4);
+        if (fmt_native > 0x3Fu) {
+            HSD_ImageDescCopyDesc(&image2_n, image2);
+            image2 = &image2_n;
+        }
+    }
+    if (tlut != NULL) {
+        u32 fmt_native;
+        memcpy(&fmt_native, &tlut->fmt, 4);
+        if (fmt_native > 0x3Fu) {
+            tlut_n.lut = tlut->lut;
+            tlut_n.fmt = (GXTlutFmt) pc_rb32(&tlut->fmt);
+            tlut_n.tlut_name = pc_rb32(&tlut->tlut_name);
+            tlut_n.n_entries = pc_rb16(&tlut->n_entries);
+            tlut = &tlut_n;
+        }
     }
 
     sobj = HSD_ObjAlloc(&HSD_SObjLib_804D10E0);

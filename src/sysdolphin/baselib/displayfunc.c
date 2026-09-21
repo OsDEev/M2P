@@ -14,6 +14,7 @@
 #include "util.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
+#include <pc/pc_endian.h> // Stage 2: ptcl data is a packed BE u32
 
 #define FLT_EPSILON 1.00000001335e-10F
 
@@ -485,13 +486,16 @@ void HSD_JObjDisp(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
         } else if (union_type_ptcl(jobj) && sptcl_callback != NULL) {
             HSD_SList* sp;
             for (sp = jobj->u.ptcl; sp != NULL; sp = sp->next) {
-                if ((((u32) sp->data) & 0x80000000) != 0) {
-                    u32 bank = JOBJ_PTCL_BANK_MASK & ((u32) sp->data);
-                    u32 offset = (((u32) sp->data) >> JOBJ_PTCL_OFFSET_SHIFT) &
+                // Stage 2: data is a packed big-endian u32, not a
+                // pointer (bit31 = fire-once flag, low bits = bank+off).
+                u32 pdata = pc_rb32(&sp->data);
+                if ((pdata & 0x80000000u) != 0) {
+                    u32 bank = JOBJ_PTCL_BANK_MASK & pdata;
+                    u32 offset = (pdata >> JOBJ_PTCL_OFFSET_SHIFT) &
                                  JOBJ_PTCL_OFFSET_MASK;
                     (*sptcl_callback)(0, bank, offset, jobj);
                 }
-                sp->data = (void*) ((u32) sp->data & JOBJ_PTCL_ACTIVE);
+                pc_wb32(&sp->data, pdata & JOBJ_PTCL_ACTIVE);
             }
         }
     }

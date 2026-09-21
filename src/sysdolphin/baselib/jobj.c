@@ -648,7 +648,9 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
         jobj->u.ptcl = joint->u.ptcl;
         slist = joint->u.ptcl;
         while (slist != NULL) {
-            *(u32*) &slist->data |= 0x80000000;
+            // Stage 2: data is a packed big-endian u32; set the
+            // fire-once flag in value space.
+            pc_wb32(&slist->data, pc_rb32(&slist->data) | 0x80000000u);
             slist = slist->next;
         }
     } else {
