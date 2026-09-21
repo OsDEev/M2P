@@ -11,6 +11,7 @@
 
 #ifdef MELEE_HAVE_IMGUI
 
+#include "hal/opengl/hal_input.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -179,6 +180,12 @@ void gui_frame(void)
                             s->pad_present[i] = pe ? 1 : 0;
                         if (i < 3)
                             ImGui::SameLine();
+                    }
+                    bool rb = s->rumble != 0;
+                    if (ImGui::Checkbox("Rumble (XInput/evdev)",
+                                        &rb)) {
+                        s->rumble = rb ? 1 : 0;
+                        hal_input_set_rumble_enabled(s->rumble);
                     }
                     ImGui::Separator();
                     for (int i = 0; i < MELEE_KEY_SLOTS; i++) {

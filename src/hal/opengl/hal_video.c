@@ -18,6 +18,7 @@
 
 void hal_input_attach_window(void* win);
 void hal_audio_pump(void);
+void hal_input_poll(void);
 
 static void (*s_frame_hook)(void);
 
@@ -197,6 +198,7 @@ void hal_video_present(void)
     if (s_frame_hook)
         s_frame_hook();
     hal_audio_pump();
+    hal_input_poll(); // pushes rumble state, among future per-frame tasks
     s_retrace++;
     s_field ^= 1;
     if (s_post_cb)

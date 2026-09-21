@@ -26,6 +26,7 @@ typedef struct {
     // input: GLFW key codes per HalKeyId order (see hal_input.h)
     int keys[MELEE_KEY_SLOTS];
     int pad_present[4];
+    int rumble; // 0/1 force-feedback master switch
     // paths
     char disc_root[1024];
     char card_a[1024];

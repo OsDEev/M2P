@@ -182,6 +182,7 @@ int main(int argc, char** argv)
             hal_input_set_key(k, s->keys[k]);
         for (k = 0; k < 4; k++)
             hal_input_set_present(k, s->pad_present[k]);
+        hal_input_set_rumble_enabled(s->rumble);
     }
 
     // ---- window + GUI ----

@@ -44,6 +44,7 @@ int hal_input_key_glfw(int id); // current GLFW key for a binding id
 void hal_input_set_key(int id, int glfw_key);
 unsigned hal_input_motor(int chan); // last PADControlMotor command
 void hal_input_set_present(int chan, int present); // controller plugged?
+void hal_input_set_rumble_enabled(int on); // force-feedback master switch
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,7 @@
 // Triggers are digital on keyboard (0/255); analog on real gamepads.
 
 #include "hal_input.h"
+#include "hal_rumble.h"
 
 #include <dolphin/pad.h>
 
@@ -95,6 +96,7 @@ const char* hal_input_key_setting(int id)
 
 int hal_input_init(void)
 {
+    hal_rumble_init();
     if (s_keys_configured)
         return 1; // keymap already pushed from settings by pc_main
     // default map
@@ -127,6 +129,7 @@ int hal_input_init(void)
 
 void hal_input_shutdown(void)
 {
+    hal_rumble_shutdown();
     s_win = NULL;
 }
 
@@ -137,7 +140,11 @@ void hal_input_attach_window(void* win)
 
 void hal_input_poll(void)
 {
-    // state is sampled on demand in PADRead(); nothing cached.
+    // Pads are sampled on demand in PADRead(); here we only push
+    // force-feedback state (cheap: backends send on change only).
+    int i;
+    for (i = 0; i < PAD_MAX_CONTROLLERS; i++)
+        hal_rumble_sync(i, s_motor[i], s_present[i]);
 }
 
 int hal_input_key_glfw(int id)
@@ -166,6 +173,11 @@ void hal_input_set_present(int chan, int present)
 {
     if (chan >= 0 && chan < PAD_MAX_CONTROLLERS)
         s_present[chan] = present ? 1 : 0;
+}
+
+void hal_input_set_rumble_enabled(int on)
+{
+    hal_rumble_set_enabled(on);
 }
 
 static int key_down(int glfw_key)

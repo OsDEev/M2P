@@ -82,6 +82,7 @@ void melee_settings_defaults(MeleeSettings* s)
         s->keys[i] = defkeys[i];
     for (i = 0; i < 4; i++)
         s->pad_present[i] = 1;
+    s->rumble = 1;
     s->mem_size_mb = 24;
     s->language = 0;
     s->gui_startup = 0;
@@ -273,6 +274,8 @@ int melee_settings_load(const char* path, MeleeSettings* s)
                 } else if (strncmp(k, "pad", 3) == 0 && k[3] >= '0' &&
                            k[3] <= '3' && k[4] == '\0') {
                     s->pad_present[k[3] - '0'] = parse_int(v, 0, 1, 1);
+                } else if (strcmp(k, "rumble") == 0) {
+                    s->rumble = parse_int(v, 0, 1, 1);
                 }
             } else if (strcmp(section, "paths") == 0) {
                 if (strcmp(k, "disc") == 0) {
@@ -323,6 +326,7 @@ int melee_settings_save(const char* path, const MeleeSettings* s)
     }
     for (i = 0; i < 4; i++)
         fprintf(f, "pad%d=%d\n", i, s->pad_present[i]);
+    fprintf(f, "rumble=%d\n", s->rumble);
     fprintf(f, "[paths]\ndisc=%s\ncard_a=%s\ncard_b=%s\nuser=%s\n",
             s->disc_root, s->card_a, s->card_b, s->user_dir);
     fprintf(f, "[system]\nmem_mb=%d\nlanguage=%d\ngui_startup=%d\n",
