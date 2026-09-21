@@ -54,12 +54,17 @@ jobs:
       shell: bash
 
     - name: Build errors (summary)
+      # NOTE: step summaries/logs need a login to view; ::error::
+      # annotations are also readable via the public Checks API, so emit
+      # the first errors there too (workflow-command escaping applied).
       if: failure()
       run: |
         echo '## Build errors (first 30)' >> "$GITHUB_STEP_SUMMARY"
         echo '```' >> "$GITHUB_STEP_SUMMARY"
         grep -E -i -m 30 'error|undefined reference' build_pc/build.log >> "$GITHUB_STEP_SUMMARY" || true
         echo '```' >> "$GITHUB_STEP_SUMMARY"
+        CTX=$(grep -E -i -A3 -m 8 '\berror\b' build_pc/build.log | head -50 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | paste -sd '%0A' -)
+        if [ -n "$CTX" ]; then echo "::error::$CTX"; fi
       shell: bash
 
     - name: Smoke test (--help)
