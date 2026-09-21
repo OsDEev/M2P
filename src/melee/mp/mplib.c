@@ -8,7 +8,9 @@
 #include <Runtime/platform.h>
 
 #include <melee/lb/forward.h>
+#include <pc/pc_endian.h> // Stage 2: MapCollData is big-endian file data
 #include <sysdolphin/baselib/forward.h>
+#include <sysdolphin/baselib/memory.h>
 
 #include <math.h>
 #include <placeholder.h>
@@ -880,6 +882,85 @@ void mpPruneEmptyLines(MapCollData* coll_data)
     }
 }
 
+// Stage 2 (PC port): duplicate a file MapCollData into heap-native form
+// (all scalars convert; verts/lines/joints/ranges deep-copied). Every
+// downstream reader (mpcoll physics, mpisland, prune) then stays native.
+// The default static (&mpLib_803BF760) is already host-native and passes
+// through untouched. Previous duplicate is freed: one live copy max.
+static MapCollData* mp_coll_dup;
+
+static MapCollData* mpCollDataDupBe(const MapCollData* src)
+{
+    MapCollData* dst;
+    int i, g;
+    if (src == NULL) {
+        return NULL;
+    }
+    dst = HSD_MemAlloc(sizeof(MapCollData));
+    if (dst == NULL) {
+        return NULL;
+    }
+    dst->vert_count = (int) pc_rb32(&src->vert_count);
+    dst->line_count = (int) pc_rb32(&src->line_count);
+    dst->joint_count = (int) pc_rb32(&src->joint_count);
+    memcpy(&dst->x2C, &src->x2C, 4);
+    dst->verts = dst->vert_count
+                     ? HSD_MemAlloc(sizeof(Vec2) * dst->vert_count)
+                     : NULL;
+    dst->lines = dst->line_count
+                     ? HSD_MemAlloc(sizeof(MapLine) * dst->line_count)
+                     : NULL;
+    dst->joints = dst->joint_count
+                      ? HSD_MemAlloc(sizeof(MapJoint) * dst->joint_count)
+                      : NULL;
+    if ((dst->vert_count && !dst->verts) ||
+        (dst->line_count && !dst->lines) ||
+        (dst->joint_count && !dst->joints)) {
+        // Short alloc: unwind (HSD_MemAlloc asserts internally anyway).
+        if (dst->verts)
+            HSD_Free(dst->verts);
+        if (dst->lines)
+            HSD_Free(dst->lines);
+        if (dst->joints)
+            HSD_Free(dst->joints);
+        HSD_Free(dst);
+        return NULL;
+    }
+    for (i = 0; i < dst->vert_count; i++) {
+        dst->verts[i].x = pc_rf32(&src->verts[i].x);
+        dst->verts[i].y = pc_rf32(&src->verts[i].y);
+    }
+    for (i = 0; i < dst->line_count; i++) {
+        dst->lines[i].v0_idx = pc_rb16(&src->lines[i].v0_idx);
+        dst->lines[i].v1_idx = pc_rb16(&src->lines[i].v1_idx);
+        dst->lines[i].prev_id0 = (s16) pc_rb16(&src->lines[i].prev_id0);
+        dst->lines[i].next_id0 = (s16) pc_rb16(&src->lines[i].next_id0);
+        dst->lines[i].prev_id1 = (s16) pc_rb16(&src->lines[i].prev_id1);
+        dst->lines[i].next_id1 = (s16) pc_rb16(&src->lines[i].next_id1);
+        dst->lines[i].hi_flags = pc_rb16(&src->lines[i].hi_flags);
+        dst->lines[i].lo_flags = pc_rb16(&src->lines[i].lo_flags);
+    }
+    for (g = 0; g < MapLineGroup_Count; g++) {
+        dst->ranges[g].start = (s16) pc_rb16(&src->ranges[g].start);
+        dst->ranges[g].count = (s16) pc_rb16(&src->ranges[g].count);
+    }
+    for (i = 0; i < dst->joint_count; i++) {
+        for (g = 0; g < MapLineGroup_Count; g++) {
+            dst->joints[i].ranges[g].start =
+                (s16) pc_rb16(&src->joints[i].ranges[g].start);
+            dst->joints[i].ranges[g].count =
+                (s16) pc_rb16(&src->joints[i].ranges[g].count);
+        }
+        dst->joints[i].left_bound = pc_rf32(&src->joints[i].left_bound);
+        dst->joints[i].bottom_bound = pc_rf32(&src->joints[i].bottom_bound);
+        dst->joints[i].right_bound = pc_rf32(&src->joints[i].right_bound);
+        dst->joints[i].top_bound = pc_rf32(&src->joints[i].top_bound);
+        dst->joints[i].vtx_start = (s16) pc_rb16(&src->joints[i].vtx_start);
+        dst->joints[i].vtx_count = (s16) pc_rb16(&src->joints[i].vtx_count);
+    }
+    return dst;
+}
+
 void mpLibLoad(MapCollData* coll_data)
 {
     float f0;
@@ -912,6 +993,19 @@ void mpLibLoad(MapCollData* coll_data)
     grDynamicAttr_801CA0B4();
     if (coll_data == NULL) {
         coll_data = &mpLib_803BF760;
+    } else if (coll_data != &mpLib_803BF760) {
+        // Stage 2: stage collision comes big-endian from disc; normalize
+        // into a heap copy (the default static above is already native).
+        if (mp_coll_dup != NULL) {
+            HSD_Free(mp_coll_dup->verts);
+            HSD_Free(mp_coll_dup->lines);
+            HSD_Free(mp_coll_dup->joints);
+            HSD_Free(mp_coll_dup);
+        }
+        mp_coll_dup = mpCollDataDupBe(coll_data);
+        if (mp_coll_dup != NULL) {
+            coll_data = mp_coll_dup;
+        }
     }
     f31 = Ground_801C0498();
     mpLib_80458868[0].right = F32_MAX;
