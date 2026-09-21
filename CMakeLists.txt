@@ -69,7 +69,10 @@ if(MELEE_PLATFORM_LINUX AND MELEE_USE_M32)
     # split: use the legacy libGL target (already covered by the -dev
     # packages in CI). We link only GL 1.1 entry points anyway; the rest
     # is loaded at runtime by gl_loader.
+    # (Both spellings: the exact FindOpenGL variable name varies by
+    # CMake version/docs; setting both is harmless.)
     set(OpenGL_GL_PREFERENCE LEGACY)
+    set(OPENGL_GL_PREFERENCE LEGACY)
 endif()
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)

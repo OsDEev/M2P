@@ -108,6 +108,49 @@ typedef struct {
     float k0, k1, k2, kpad;
 } HalLightObj;
 
+// Spot state (cutoff angle + falloff fn) doesn't fit the 64-byte object,
+// so it lives in a side table keyed by object pointer (same pattern as
+// the TLUT registry below). Default cutoff 180 = spot disabled.
+typedef struct {
+    const GXLightObj* obj;
+    f32 cutoff;
+    GXSpotFn spot;
+    int used;
+} LightSpotSlot;
+#define LIGHTSPOT_N 32
+static LightSpotSlot s_spots[LIGHTSPOT_N];
+
+static void hal_light_set_spot(const GXLightObj* obj, f32 cutoff,
+                               GXSpotFn spot)
+{
+    int i, free_slot = -1;
+    for (i = 0; i < LIGHTSPOT_N; i++) {
+        if (s_spots[i].used && s_spots[i].obj == obj) {
+            s_spots[i].cutoff = cutoff;
+            s_spots[i].spot = spot;
+            return;
+        }
+        if (!s_spots[i].used && free_slot < 0)
+            free_slot = i;
+    }
+    if (free_slot < 0)
+        free_slot = 0;
+    s_spots[free_slot].used = 1;
+    s_spots[free_slot].obj = obj;
+    s_spots[free_slot].cutoff = cutoff;
+    s_spots[free_slot].spot = spot;
+}
+
+static f32 hal_light_get_cutoff(const GXLightObj* obj)
+{
+    int i;
+    for (i = 0; i < LIGHTSPOT_N; i++) {
+        if (s_spots[i].used && s_spots[i].obj == obj)
+            return s_spots[i].cutoff;
+    }
+    return 180.f;
+}
+
 // PC-side TLUT object (12 bytes == sizeof(GXTlutObj))
 typedef struct {
     const void* data;
@@ -816,9 +859,8 @@ void GXInitLightAttnK(GXLightObj* lt_obj, f32 k0, f32 k1, f32 k2)
 
 void GXInitLightSpot(GXLightObj* lt_obj, f32 cutoff, GXSpotFn spot_func)
 {
-    HalLightObj* o = (HalLightObj*) lt_obj;
-    (void) spot_func;
-    o->cutoff = cutoff;
+    (void) lt_obj;
+    hal_light_set_spot(lt_obj, cutoff, spot_func);
 }
 
 void GXInitLightDistAttn(GXLightObj* lt_obj, f32 ref_dist, f32 ref_br,
@@ -898,7 +940,7 @@ void GXLoadLightObjImm(GXLightObj* lt_obj, GXLightID light)
     dst->k0 = o->k0;
     dst->k1 = o->k1;
     dst->k2 = o->k2;
-    dst->cutoff = o->cutoff;
+    dst->cutoff = hal_light_get_cutoff(lt_obj);
 }
 
 void GXLoadLightObjIndx(u32 lt_obj_indx, GXLightID light)
@@ -2304,10 +2346,6 @@ GXVerifyCallback GXSetVerifyCallback(GXVerifyCallback cb)
     return prev;
 }
 
-// gx.h misc (shared declarations)
-void (*GXSetDrawSyncCallback(void (*cb)(unsigned short)))(unsigned short)
-{
-    void (*prev)(unsigned short) = (void (*)(unsigned short)) s_sync_cb;
-    s_sync_cb = (GXDrawSyncCallback) cb;
-    return prev;
-}
+// NOTE: <dolphin/gx.h> redeclares GXSetDrawSyncCallback with an
+// unsigned-short spelling of the same type; the single definition above
+// (GXManage spelling) satisfies both declarations.

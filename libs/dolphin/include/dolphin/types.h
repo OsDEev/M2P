@@ -27,10 +27,24 @@ typedef int BOOL;
 #define FALSE 0
 #define TRUE 1
 
+#ifndef ATTRIBUTE_ALIGN
+#if defined(_MSC_VER) && !defined(__clang__)
+// MSVC has no __attribute__: empty keeps layout declarations compiling
+// (alignment is best-effort on the PC port; the decomp path is untouched).
+#define ATTRIBUTE_ALIGN(num)
+#else
 #define ATTRIBUTE_ALIGN(num) __attribute__((aligned(num)))
+#endif
+#endif
 
 #ifndef NULL
+#ifdef __cplusplus
+// ((void*)0) is not a valid null pointer constant in C++ and poisons
+// every header included afterwards (MSVC C2440 cascade); plain 0 is.
+#define NULL 0
+#else
 #define NULL ((void*) 0)
+#endif
 #endif
 
 #ifndef ARRAY_SIZE
