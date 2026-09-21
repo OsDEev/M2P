@@ -226,6 +226,16 @@ if(MELEE_PLATFORM_WINDOWS)
     target_link_libraries(melee_gui PUBLIC shell32) # SHGetFolderPathA
 endif()
 
+# Font blobs (.inc) only exist after extracting the retail DOL; generate
+# blank fallbacks into the build dir (real dumps in src/ win by order).
+# NOTE: keep this BEFORE melee_game so the fallback dir is in its includes.
+set(MELEE_GEN_DIR ${CMAKE_BINARY_DIR}/pc_gen)
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -DOUT_DIR=${MELEE_GEN_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tools_pc/gen_font_inc.cmake
+)
+list(APPEND MELEE_INCLUDES ${MELEE_GEN_DIR})
+
 # ---------------------------------------------------------------- game
 if(MELEE_BUILD_GAME)
     file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
@@ -236,7 +246,22 @@ if(MELEE_BUILD_GAME)
     list(REMOVE_ITEM GAME_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/src/sysdolphin/baselib/archive.c
     )
+    # MSL float tables (NaN/Inf constants used by lbtrigf/gm_1832).
+    list(APPEND GAME_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/MSL/float.c)
     add_library(melee_game STATIC ${GAME_SOURCES})
+    # The decomp targeted MWERKS (stdint types ambient); force-include
+    # <stdint.h> in every game TU instead of patching dozens of headers.
+    if(MSVC)
+        target_compile_options(melee_game PRIVATE /FI"stdint.h")
+    else()
+        # MWERKS accepts implicit function-pointer conversions (e.g. MWERKS
+        # 4-byte bool vs GCC _Bool); GCC 14 promotes them to hard errors.
+        # bool/int interop is ABI-safe on x86 for 0/1 values, so demote.
+        target_compile_options(melee_game PRIVATE
+            -include stdint.h
+            -Wno-error=incompatible-pointer-types
+        )
+    endif()
     target_include_directories(melee_game PUBLIC ${MELEE_INCLUDES})
     target_compile_definitions(melee_game PUBLIC
         MELEE_PC_PORT=1
@@ -250,26 +275,19 @@ if(MELEE_BUILD_GAME)
     target_link_libraries(melee_game PUBLIC melee_sdk2 melee_hal)
 endif()
 
-# Font blobs (.inc) only exist after extracting the retail DOL; generate
-# blank fallbacks into the build dir (real dumps in src/ win by order).
-set(MELEE_GEN_DIR ${CMAKE_BINARY_DIR}/pc_gen)
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -DOUT_DIR=${MELEE_GEN_DIR}
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/tools_pc/gen_font_inc.cmake
-)
-list(APPEND MELEE_INCLUDES ${MELEE_GEN_DIR})
-
 # ---------------------------------------------------------------- pc platform
 add_library(melee_pc_platform STATIC
     src/pc/pc_endian.c
+    src/pc/pc_archive.c
 )
 target_include_directories(melee_pc_platform PUBLIC ${MELEE_INCLUDES})
 target_link_libraries(melee_pc_platform PUBLIC
     melee_gui melee_sdk2 melee_hal
 )
-if(MELEE_BUILD_GAME)
-    target_link_libraries(melee_pc_platform PUBLIC melee_game)
-endif()
+# NOTE: melee_game is intentionally NOT linked here. Game loaders call
+# pc_rb32/pc_archive (game -> platform), so the exe links game BEFORE
+# platform; GNU ld resolves left-to-right and a platform -> game edge
+# would hide platform objects from game references.
 
 # ---------------------------------------------------------------- exe
 add_executable(melee_pc src/pc/pc_main.c)
@@ -278,10 +296,12 @@ if(MELEE_HAVE_IMGUI)
     # gui links the C++ ImGui lib: link the exe as C++ for libstdc++.
     set_target_properties(melee_pc PROPERTIES LINKER_LANGUAGE CXX)
 endif()
-target_link_libraries(melee_pc PRIVATE melee_pc_platform)
+# Game first: GNU ld pulls platform objects (pc_endian/pc_archive)
+# to satisfy game references.
 if(MELEE_BUILD_GAME)
     target_link_libraries(melee_pc PRIVATE melee_game)
 endif()
+target_link_libraries(melee_pc PRIVATE melee_pc_platform)
 
 if(MELEE_PLATFORM_WINDOWS)
     target_link_libraries(melee_pc PRIVATE shell32)

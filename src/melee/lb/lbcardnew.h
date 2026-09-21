@@ -35,11 +35,11 @@ typedef void (*LbCardOnFinishedCallback)(int);
 /* 01B760 */ int lbCardNew_CompleteAllTasks(int result);
 /* 01B7E0 */ u32 lb_8001B7E0(int chan, char* filename, void* file_entries,
                              void* save_data, int* status_out);
-/* 01B8C8 */ bool lb_8001B8C8(int chan);
+/* 01B8C8 */ int lb_8001B8C8(int chan);
 /* 01B99C */ int lbCardNew_DeleteSnap(int chan, const char* filename,
                                       UNK_T status_out);
-/* 01BA44 */ bool lb_8001BA44(int chan, const char* filename,
-                              UNK_T status_out);
+/* 01BA44 */ int lb_8001BA44(int chan, const char* filename,
+                             UNK_T status_out);
 /* 01BB48 */ int lb_8001BB48(int chan, char* filename, void* file_entries,
                              void* save_data, char* comment, void* banner,
                              void* icons, UNK_T status_out);

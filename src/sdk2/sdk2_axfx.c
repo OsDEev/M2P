@@ -17,8 +17,18 @@
 #include <dolphin/axfx.h>
 
 #include <math.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+
+// FxComb/FxAllpass name the REVSTD delay-line type, but REVHI lines are
+// layout-identical (verified below), so HI paths cast explicitly.
+_Static_assert(sizeof(struct AXFX_REVSTD_DELAYLINE) ==
+                   sizeof(struct AXFX_REVHI_DELAYLINE),
+               "HI/STD delay lines must match");
+_Static_assert(offsetof(struct AXFX_REVSTD_DELAYLINE, inputs) ==
+                   offsetof(struct AXFX_REVHI_DELAYLINE, inputs),
+               "HI/STD delay lines must match");
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -372,14 +382,14 @@ static float revhi_channel(struct AXFX_REVERBHI* rev, int ch, float x)
         x = delayed;
     }
     for (i = 0; i < 4; i++) {
-        c[i].d = &rev->rv.C[ch * 4 + i];
+        c[i].d = (struct AXFX_REVSTD_DELAYLINE*) &rev->rv.C[ch * 4 + i];
         c[i].fb = fx_fb_for_time((int) c[i].d->length, rev->time);
         c[i].damp = clampf(rev->damping, 0.f, 0.99f);
         y += fx_comb(&c[i], x);
     }
     y *= 0.25f;
     for (i = 0; i < 2; i++) {
-        a[i].d = &rev->rv.AP[ch * 2 + i];
+        a[i].d = (struct AXFX_REVSTD_DELAYLINE*) &rev->rv.AP[ch * 2 + i];
         a[i].fb = rev->rv.allPassCoeff;
         y = fx_allpass(&a[i], y);
     }

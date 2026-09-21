@@ -1695,6 +1695,8 @@ void gx_hal_end(void)
 }
 
 // ------------------------------------------------------------ display lists
+// Forward: defined alongside the GXVert shim near the end of the file.
+static GXAttr clr_target(void);
 // Executes a prebuilt GX display list (HSD static geometry). The stream
 // layout matches what HSD emits: opcode|vat, BE16 count, then per-vertex
 // attribute data in FIFO order. Attribute presence and encoding follow the
@@ -1810,8 +1812,6 @@ static int dl_attr_enabled(GXAttr a)
 }
 
 // (defined near the GXVert shim, far below)
-static GXAttr clr_target(void);
-
 void hal_execute_display_list(const u8* dl, u32 nbytes)
 {
     u32 pos = 0;

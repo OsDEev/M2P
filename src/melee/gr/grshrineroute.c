@@ -98,7 +98,7 @@ struct grSh_Route_LightConfig {
 /* 20AE08 */ static s32 grShrineRoute_8020AE08(HSD_GObj*, HSD_GObj*, s32*);
 /* 20AF38 */ static void grShrineRoute_8020AF38(HSD_GObj*, s32);
 /* 20B020 */ static void grShrineRoute_8020B020(HSD_GObj* gobj, int r4,
-                                                bool hide);
+                                                int hide);
 /* 20B0AC */ static void grShrineRoute_8020B0AC(void);
 /* 20B104 */ static DynamicsDesc* grShrineRoute_OnTouchLine(enum_t);
 /* 20B10C */ static bool grShrineRoute_OnCheckShadowRender(Vec3*, int arg,

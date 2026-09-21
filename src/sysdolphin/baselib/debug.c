@@ -11,6 +11,14 @@ struct DebugContext {
 
 static ReportCallback reportCallback;
 static PanicCallback panicCallback;
+#ifdef MELEE_PC_PORT
+/// MWERKS libc exposes hookable stdout (`FILE.write_proc`, `__io_proc`,
+/// `__file_handle`, `__idle_proc`); glibc does not. The report callback
+/// path still works; plain stdout output goes through OSReport instead.
+typedef void* __file_handle;
+typedef void* __idle_proc;
+typedef int (*__io_proc)(__file_handle, unsigned char*, size_t*, __idle_proc);
+#endif
 static __io_proc logFunc;
 
 #ifdef MUST_MATCH
@@ -23,17 +31,24 @@ static int report_func(__file_handle arg0, unsigned char* arg1, size_t* arg2,
     if (reportCallback != NULL) {
         reportCallback(arg1, *arg2);
     }
-    logFunc(arg0, arg1, arg2, arg3);
+    if (logFunc != NULL) {
+        logFunc(arg0, arg1, arg2, arg3);
+    }
     return 0;
 }
 
 void HSD_LogInit(void)
 {
+#ifdef MELEE_PC_PORT
+    /* No hookable stdout on PC; OSReport routes output instead. */
+    (void) report_func;
+#else
     if (logFunc == NULL) {
         logFunc = stdout->write_proc;
     }
     stdout->write_proc = report_func;
     stdout->state.error = 0;
+#endif
 }
 
 void __assert(const char* str, u32 arg1, const char* arg2)

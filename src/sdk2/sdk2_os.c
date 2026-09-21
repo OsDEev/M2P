@@ -1794,3 +1794,20 @@ int OSJamMessage(struct OSMessageQueue* mq, void* msg, long flags)
     mq_unlock(s);
     return 1;
 }
+
+// ------------------------------------------------------------ PPC/debuglink
+// The debug menu pokes the PPC MSR (FP/exception bits) and prints GC
+// linker-script stack bounds. Neither exists on PC: MSR access is a
+// no-op, and the stack symbols are inert dummies (debug output only).
+u32 PPCMfmsr(void)
+{
+    return 0;
+}
+
+void PPCMtmsr(u32 newMSR)
+{
+    (void) newMSR;
+}
+
+unsigned char _stack_end[4] = { 0, 0, 0, 0 };
+unsigned char _stack_addr[4] = { 0, 0, 0, 0 };

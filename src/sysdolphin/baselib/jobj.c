@@ -672,11 +672,12 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
         int r, c;
         jobj->envelopemtx = HSD_MtxAlloc();
         memcpy(jobj->envelopemtx, joint->mtx, sizeof(Mtx));
-        // Stage 2: envelope matrix floats are big-endian.
+        // Stage 2: envelope matrix floats are big-endian
+        // (MtxPtr is f32 (*)[4]: index directly, no dereference).
         for (r = 0; r < 3; r++) {
             for (c = 0; c < 4; c++) {
-                (*jobj->envelopemtx)[r][c] =
-                    pc_swapf((*jobj->envelopemtx)[r][c]);
+                jobj->envelopemtx[r][c] =
+                    pc_swapf(jobj->envelopemtx[r][c]);
             }
         }
     }

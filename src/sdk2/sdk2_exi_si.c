@@ -6,13 +6,25 @@
 // EXI channels report "no device", SI reports standard GC controllers on
 // channels backed by hal_input.
 
-#include <dolphin.h>
-#include <dolphin/db.h>
+#include <dolphin/types.h>
+#include <dolphin/os/OSContext.h>
+
+// si.h relies on ambient OSTime (normally from dolphin/os.h, which we
+// deliberately do NOT include here: os.h also pulls os/OSSerial.h,
+// which redeclares the same SI entry points with different
+// (unsigned long) signatures and breaks the build).
+typedef s64 OSTime;
+
 #include <dolphin/exi.h>
 #include <dolphin/si.h>
 
 #include <stdarg.h>
 #include <stdio.h>
+
+// Declared locally instead of <dolphin/db.h>: db.h pulls db/DBInterface.h
+// which includes <dolphin/os.h> (see above).
+BOOL DBIsDebuggerPresent(void);
+void DBPrintf(char* str, ...);
 
 // ------------------------------------------------------------ debugger stub
 BOOL DBIsDebuggerPresent(void)
