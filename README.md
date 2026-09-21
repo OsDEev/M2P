@@ -49,6 +49,25 @@ cmake --build build_pc --config Release --parallel
 cmake -S . -B build_pc -DMELEE_WANT_IMGUI=OFF
 ```
 
+### ROM: распаковка диска
+
+Порту нужен **распакованный** корень диска GALE01 (слой DVD читает
+файлы с хоста). Распаковщик собирается вместе с проектом:
+
+```sh
+./build_pc/bin/melee_romextract game.iso out/   # полное дерево
+./build_pc/bin/melee_romextract --list game.iso  # список файлов
+./build_pc/bin/melee_romextract --one game.iso audio/us/xxx.hps out.hps
+```
+
+Принимаются только plain-ISO/GCM. Сжатые образы (CISO/GCZ/RVZ/WIA)
+отклоняются с подсказкой — сконвертируйте в plain ISO (Dolphin:
+правый клик по игре → Convert → ISO). Дальше:
+
+```sh
+./build_pc/bin/melee_pc --disc out/
+```
+
 ### Запуск
 
 ```sh

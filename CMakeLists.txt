@@ -287,7 +287,11 @@ if(MELEE_PLATFORM_WINDOWS)
     target_link_libraries(melee_pc PRIVATE shell32)
 endif()
 
-install(TARGETS melee_pc RUNTIME DESTINATION bin)
+# ---------------------------------------------------------------- tools
+# Host-side helpers (dependency-free C99, build with the same flags).
+add_executable(melee_romextract tools_pc/romextract.c)
+
+install(TARGETS melee_pc melee_romextract RUNTIME DESTINATION bin)
 
 message(STATUS "[melee] platform : ${CMAKE_SYSTEM_NAME}")
 message(STATUS "[melee] build type: ${CMAKE_BUILD_TYPE}")
