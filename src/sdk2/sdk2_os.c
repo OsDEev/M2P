@@ -240,11 +240,13 @@ void OSInit(void)
 {
     tick_ensure();
     if (!s_arena_base) {
-        // Low memory: retail code funnels some heap pointers through u32
-        // (ARQ transfers), which is only lossless below 4 GB.
+        // Arena must honor LOWMEM_FLOOR (MRAM must never alias the ARAM
+        // window); a NULL here fails fast instead of corrupting later.
         s_arena_base = sdk2_low_alloc(s_arena_size);
-        if (!s_arena_base)
-            s_arena_base = malloc(s_arena_size);
+        if (!s_arena_base) {
+            fputs("[sdk2] FATAL: no floored arena available\n", stderr);
+            abort();
+        }
         s_arena_lo = s_arena_base;
         s_arena_hi = (u8*) s_arena_base + s_arena_size;
     }
