@@ -335,7 +335,7 @@ u32 PSMTXInvXpose(Mtx src, Mtx invX)
     return C_MTXInvXpose(src, invX);
 }
 
-void MTXTrans(Mtx m, f32 xT, f32 yT, f32 zT)
+void C_MTXTrans(Mtx m, f32 xT, f32 yT, f32 zT)
 {
     mtx_identity(m);
     m[0][3] = xT;
@@ -345,7 +345,7 @@ void MTXTrans(Mtx m, f32 xT, f32 yT, f32 zT)
 
 void PSMTXTrans(Mtx m, f32 xT, f32 yT, f32 zT)
 {
-    MTXTrans(m, xT, yT, zT);
+    C_MTXTrans(m, xT, yT, zT);
 }
 
 void MTXTransApply(Mtx src, Mtx dst, f32 xT, f32 yT, f32 zT)

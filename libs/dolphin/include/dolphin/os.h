@@ -70,6 +70,12 @@ u32 __OSSimulatedMemSize : (OS_BASE_CACHED | 0x00F0);
 u32 __OSBusClock : (OS_BASE_CACHED | 0x00F8);
 u32 __OSCoreClock : (OS_BASE_CACHED | 0x00FC);
 int __EXIProbeStartTime[2] : (OS_BASE_CACHED | 0x30C0);
+#elif defined(MELEE_PC_PORT)
+// PC port: bus/core clocks are real variables owned by SDK2 (sdk2_os.c).
+// The retail fallback below dereferences fixed GameCube addresses and
+// would fault immediately (it also breaks the definition itself).
+extern u32 __OSBusClock;
+extern u32 __OSCoreClock;
 #else
 #define __OSBusClock (*(u32*) (OS_BASE_CACHED | 0x00F8))
 #define __OSCoreClock (*(u32*) (OS_BASE_CACHED | 0x00FC))
