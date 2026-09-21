@@ -12,9 +12,9 @@
 // (volumes, ratios) use native loads. See README_PC_PORT.md (Stage 2)
 // for the remaining game-side SFX-entry parsing work.
 //
-// Not yet emulated (documented): aux-bus effects (reverb/chorus/delay run
-// as no-ops — AXFX* init calls succeed so the game boots), ITD,
-// FIR/4-tap SRC (linear instead), DPOP removal.
+// Aux-bus effects (reverb/chorus/delay) run for real in sdk2_axfx.c.
+// Not yet emulated: ITD, FIR/4-tap SRC (linear instead), DPOP removal,
+// aux-send volume deltas (static sends).
 
 #include <dolphin/ax.h>
 #include <dolphin/axfx.h>
@@ -430,140 +430,7 @@ u32 AXGetDspCycles(void)
     return 0;
 }
 
-// ------------------------------------------------------------ AXFX stubs
-void* (*__AXFXAlloc)(unsigned long);
-void (*__AXFXFree)(void*);
-
-void* AXFXAllocFunction(unsigned long size)
-{
-    if (__AXFXAlloc)
-        return __AXFXAlloc(size);
-    return malloc(size ? size : 1);
-}
-
-void AXFXFreeFunction(void* ptr)
-{
-    if (__AXFXFree)
-        __AXFXFree(ptr);
-    else
-        free(ptr);
-}
-
-void AXFXSetHooks(void* (*alloc_hook)(unsigned long),
-                  void (*free_hook)(void*))
-{
-    __AXFXAlloc = alloc_hook;
-    __AXFXFree = free_hook;
-}
-
-int AXFXChorusInit(struct AXFX_CHORUS* c)
-{
-    (void) c;
-    return 1;
-}
-
-int AXFXChorusShutdown(struct AXFX_CHORUS* c)
-{
-    (void) c;
-    return 1;
-}
-
-int AXFXChorusSettings(struct AXFX_CHORUS* c)
-{
-    (void) c;
-    return 1;
-}
-
-void AXFXChorusCallback(struct AXFX_BUFFERUPDATE* bufferUpdate,
-                        struct AXFX_CHORUS* chorus)
-{
-    (void) bufferUpdate;
-    (void) chorus;
-}
-
-void AXFXDelayCallback(struct AXFX_BUFFERUPDATE* bufferUpdate,
-                       struct AXFX_DELAY* delay)
-{
-    (void) bufferUpdate;
-    (void) delay;
-}
-
-int AXFXDelaySettings(struct AXFX_DELAY* delay)
-{
-    (void) delay;
-    return 1;
-}
-
-int AXFXDelayInit(struct AXFX_DELAY* delay)
-{
-    (void) delay;
-    return 1;
-}
-
-int AXFXDelayShutdown(struct AXFX_DELAY* delay)
-{
-    (void) delay;
-    return 1;
-}
-
-void DoCrossTalk(long* l, long* r, float cross, float invcross)
-{
-    (void) l;
-    (void) r;
-    (void) cross;
-    (void) invcross;
-}
-
-int AXFXReverbHiInit(struct AXFX_REVERBHI* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-int AXFXReverbHiShutdown(struct AXFX_REVERBHI* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-int AXFXReverbHiSettings(struct AXFX_REVERBHI* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-void AXFXReverbHiCallback(struct AXFX_BUFFERUPDATE* bufferUpdate,
-                          struct AXFX_REVERBHI* reverb)
-{
-    (void) bufferUpdate;
-    (void) reverb;
-}
-
-int AXFXReverbStdInit(struct AXFX_REVERBSTD* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-int AXFXReverbStdShutdown(struct AXFX_REVERBSTD* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-int AXFXReverbStdSettings(struct AXFX_REVERBSTD* rev)
-{
-    (void) rev;
-    return 1;
-}
-
-void AXFXReverbStdCallback(struct AXFX_BUFFERUPDATE* bufferUpdate,
-                           struct AXFX_REVERBSTD* reverb)
-{
-    (void) bufferUpdate;
-    (void) reverb;
-}
-
+// NOTE: AXFX hooks + effect implementations live in sdk2_axfx.c.
 // ------------------------------------------------------------ mixer core
 extern void* sdk2_ar_host(u32 aram_addr);
 extern u32 sdk2_ar_size(void);
@@ -713,67 +580,122 @@ static float voice_sample(int vi, int* ended)
 }
 
 // Render nframes stereo s16 @ 32 kHz (the hal_audio_mix_request entry).
+// Processed in AX_FRAME (160-sample) chunks: voices render main + aux
+// sends, registered aux callbacks process their buses via the AXFX
+// effects (sdk2_axfx.c), and wet returns fold back into main stereo.
+extern unsigned axfx_block_len; // owned by sdk2_axfx.c
 void hal_audio_mix_request(s16* out, unsigned nframes)
 {
+    static float mL[AX_FRAME], mR[AX_FRAME];
+    static float aAL[AX_FRAME], aAR[AX_FRAME];
+    static float aBL[AX_FRAME], aBR[AX_FRAME];
+    static long auxA[3][AX_FRAME], auxB[3][AX_FRAME];
     static unsigned since_frame_cb;
-    unsigned f;
-    int vi;
-    for (f = 0; f < nframes; f++) {
-        float L = 0, R = 0;
+    unsigned done = 0;
+    while (done < nframes) {
+        unsigned chunk = nframes - done;
+        unsigned f;
+        int vi;
+        if (chunk > AX_FRAME)
+            chunk = AX_FRAME;
+        for (f = 0; f < chunk; f++)
+            mL[f] = mR[f] = aAL[f] = aAR[f] = aBL[f] = aBR[f] = 0;
         for (vi = 0; vi < AX_MAX_VOICES; vi++) {
             AXVPB* v;
             VoiceState* st;
-            float s, vl, vr, ve;
-            int ended = 0;
             if (!s_voice_used[vi])
                 continue;
             v = &s_voices[vi];
             st = &s_vs[vi];
             if (!st->active || v->pb.state == 0)
                 continue;
-            s = voice_sample(vi, &ended);
-            if (ended) {
-                st->active = 0;
-                v->pb.state = 0;
-                if (v->callback)
-                    v->callback(
-                        (void*) (uintptr_t) v->userContext);
-                continue;
+            for (f = 0; f < chunk; f++) {
+                float s, vl, vr, ve;
+                int ended = 0;
+                s = voice_sample(vi, &ended);
+                if (ended) {
+                    st->active = 0;
+                    v->pb.state = 0;
+                    if (v->callback)
+                        v->callback(
+                            (void*) (uintptr_t) v->userContext);
+                    break;
+                }
+                // VE volume ramp (native u16 volume + s16 delta/sample)
+                ve = v->pb.ve.currentVolume / 32767.f;
+                ve += v->pb.ve.currentDelta / 32767.f;
+                if (ve < 0)
+                    ve = 0;
+                if (ve > 1)
+                    ve = 1;
+                v->pb.ve.currentVolume = (u16) (ve * 32767.f);
+                // mix volumes are native u16 (game-computed); aux send
+                // deltas are not animated in v1 (static sends).
+                vl = (v->pb.mix.vL / 32768.f) * ve;
+                vr = (v->pb.mix.vR / 32768.f) * ve;
+                mL[f] += s * vl;
+                mR[f] += s * vr;
+                aAL[f] += s * (v->pb.mix.vAuxAL / 32768.f) * ve;
+                aAR[f] += s * (v->pb.mix.vAuxAR / 32768.f) * ve;
+                aBL[f] += s * (v->pb.mix.vAuxBL / 32768.f) * ve;
+                aBR[f] += s * (v->pb.mix.vAuxBR / 32768.f) * ve;
             }
-            // VE volume ramp (native u16 volume + s16 delta per sample)
-            ve = v->pb.ve.currentVolume / 32767.f;
-            ve += v->pb.ve.currentDelta / 32767.f;
-            if (ve < 0)
-                ve = 0;
-            if (ve > 1)
-                ve = 1;
-            v->pb.ve.currentVolume = (u16) (ve * 32767.f);
-            // mix volumes are native u16 (game-computed)
-            vl = (v->pb.mix.vL / 32768.f) * ve;
-            vr = (v->pb.mix.vR / 32768.f) * ve;
-            L += s * vl;
-            R += s * vr;
         }
-        // aux buses are silent in v1 (effects are stubs); still invoke
-        // the registered aux callbacks so game code paths run.
-        if (L > 1)
-            L = 1;
-        if (L < -1)
-            L = -1;
-        if (R > 1)
-            R = 1;
-        if (R < -1)
-            R = -1;
-        out[f * 2 + 0] = (s16) (L * 32767.f);
-        out[f * 2 + 1] = (s16) (R * 32767.f);
-        if (++since_frame_cb >= AX_FRAME) {
-            since_frame_cb = 0;
+        // aux buses through registered effects (in place, s32 s16-range)
+        axfx_block_len = chunk;
+        if (s_aux_a_cb) {
+            struct AXFX_BUFFERUPDATE upd;
+            for (f = 0; f < chunk; f++) {
+                auxA[0][f] = (long) (aAL[f] * 32767.f);
+                auxA[1][f] = (long) (aAR[f] * 32767.f);
+                auxA[2][f] =
+                    (long) ((aAL[f] + aAR[f]) * 0.5f * 32767.f);
+            }
+            upd.left = auxA[0];
+            upd.right = auxA[1];
+            upd.surround = auxA[2];
+            s_aux_a_cb(&upd, s_aux_a_ctx);
+            for (f = 0; f < chunk; f++) {
+                mL[f] += auxA[0][f] / 32767.f;
+                mR[f] += auxA[1][f] / 32767.f;
+            }
+        }
+        if (s_aux_b_cb) {
+            struct AXFX_BUFFERUPDATE upd;
+            for (f = 0; f < chunk; f++) {
+                auxB[0][f] = (long) (aBL[f] * 32767.f);
+                auxB[1][f] = (long) (aBR[f] * 32767.f);
+                auxB[2][f] =
+                    (long) ((aBL[f] + aBR[f]) * 0.5f * 32767.f);
+            }
+            upd.left = auxB[0];
+            upd.right = auxB[1];
+            upd.surround = auxB[2];
+            s_aux_b_cb(&upd, s_aux_b_ctx);
+            for (f = 0; f < chunk; f++) {
+                mL[f] += auxB[0][f] / 32767.f;
+                mR[f] += auxB[1][f] / 32767.f;
+            }
+        }
+        for (f = 0; f < chunk; f++) {
+            float L = mL[f], R = mR[f];
+            if (L > 1)
+                L = 1;
+            if (L < -1)
+                L = -1;
+            if (R > 1)
+                R = 1;
+            if (R < -1)
+                R = -1;
+            out[(done + f) * 2 + 0] = (s16) (L * 32767.f);
+            out[(done + f) * 2 + 1] = (s16) (R * 32767.f);
+        }
+        done += chunk;
+        since_frame_cb += chunk;
+        while (since_frame_cb >= AX_FRAME) {
+            since_frame_cb -= AX_FRAME;
             if (s_user_cb)
                 s_user_cb();
-            if (s_aux_a_cb)
-                s_aux_a_cb(NULL, s_aux_a_ctx);
-            if (s_aux_b_cb)
-                s_aux_b_cb(NULL, s_aux_b_ctx);
         }
     }
 }
