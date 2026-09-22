@@ -153,10 +153,14 @@ void ftPe_SpecialAirLw_Enter(HSD_GObj* gobj)
     throwVegIfHeld(gobj, ftCo_MS_LightThrowAirF4);
 }
 
-static MotionFlags const coll_mf = Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim |
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { coll_mf = Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim |
                                    Ft_MF_UpdateCmd | Ft_MF_SkipItemVis |
                                    Ft_MF_Unk19 | Ft_MF_SkipModelPartVis |
-                                   Ft_MF_SkipModelFlags | Ft_MF_Unk27;
+                                   Ft_MF_SkipModelFlags | Ft_MF_Unk27 };
 
 static void handleAirColl(HSD_GObj* gobj)
 {

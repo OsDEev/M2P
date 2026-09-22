@@ -4,30 +4,34 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/kinds/ftCommon/forward.h>
 
-static MotionFlags const ftMr_MF_Special =
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { ftMr_MF_Special =
     Ft_MF_SkipModel | Ft_MF_SkipItemVis | Ft_MF_UnkUpdatePhys |
-    Ft_MF_FreezeState;
+    Ft_MF_FreezeState };
 
-static MotionFlags const ftMr_MF_SpecialN =
-    ftMr_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException;
+enum { ftMr_MF_SpecialN =
+    ftMr_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException };
 
-static MotionFlags const ftMr_MF_SpecialHi =
-    ftMr_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx;
+enum { ftMr_MF_SpecialHi =
+    ftMr_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx };
 
-static MotionFlags const ftMr_MF_SpecialLw =
-    ftMr_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx;
+enum { ftMr_MF_SpecialLw =
+    ftMr_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx };
 
-static MotionFlags const ftMr_MF_SpecialAirN =
-    ftMr_MF_SpecialN | Ft_MF_SkipParasol;
+enum { ftMr_MF_SpecialAirN =
+    ftMr_MF_SpecialN | Ft_MF_SkipParasol };
 
-static MotionFlags const ftMr_MF_SpecialAirHi =
-    ftMr_MF_SpecialHi | Ft_MF_SkipParasol;
+enum { ftMr_MF_SpecialAirHi =
+    ftMr_MF_SpecialHi | Ft_MF_SkipParasol };
 
-static MotionFlags const ftMr_MF_SpecialAirLw =
-    ftMr_MF_SpecialLw | Ft_MF_SkipParasol;
+enum { ftMr_MF_SpecialAirLw =
+    ftMr_MF_SpecialLw | Ft_MF_SkipParasol };
 
-static MotionFlags const ftMr_MF_SpecialS =
-    ftMr_MF_Special | Ft_MF_KeepGfx | Ft_MF_SkipModel | Ft_MF_SkipColAnim;
+enum { ftMr_MF_SpecialS =
+    ftMr_MF_Special | Ft_MF_KeepGfx | Ft_MF_SkipModel | Ft_MF_SkipColAnim };
 
 typedef enum ftMario_MotionState {
     ftMr_MS_AppealSR = ftCo_MS_Count,

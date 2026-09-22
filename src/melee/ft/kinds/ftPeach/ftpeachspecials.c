@@ -29,11 +29,15 @@
 /* 11CC74 */ static void enterEndSmash(HSD_GObj* gobj);
 /* 11CD30 */ static void enterAirEndSmash(HSD_GObj* gobj);
 
-static MotionFlags const start_mf =
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { start_mf =
     Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim |
     Ft_MF_UpdateCmd | Ft_MF_SkipItemVis | Ft_MF_Unk19 |
-    Ft_MF_SkipModelPartVis | Ft_MF_SkipModelFlags | Ft_MF_Unk27;
-static MotionFlags const end_mf = Ft_MF_SkipColAnim | Ft_MF_UpdateCmd;
+    Ft_MF_SkipModelPartVis | Ft_MF_SkipModelFlags | Ft_MF_Unk27 };
+enum { end_mf = Ft_MF_SkipColAnim | Ft_MF_UpdateCmd };
 
 static void reset(HSD_GObj* gobj)
 {

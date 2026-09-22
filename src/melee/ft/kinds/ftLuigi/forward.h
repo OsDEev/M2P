@@ -4,36 +4,40 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/kinds/ftCommon/forward.h>
 
-static MotionFlags const ftLg_MF_Special =
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { ftLg_MF_Special =
     Ft_MF_SkipModel | Ft_MF_SkipItemVis | Ft_MF_UnkUpdatePhys |
-    Ft_MF_FreezeState;
+    Ft_MF_FreezeState };
 
-static MotionFlags const ftLg_MF_SpecialN =
-    ftLg_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException;
+enum { ftLg_MF_SpecialN =
+    ftLg_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException };
 
-static MotionFlags const ftLg_MF_SpecialS =
-    ftLg_MF_Special | Ft_MF_KeepGfx | Ft_MF_KeepSfx;
+enum { ftLg_MF_SpecialS =
+    ftLg_MF_Special | Ft_MF_KeepGfx | Ft_MF_KeepSfx };
 
-static MotionFlags const ftLg_MF_SpecialHi =
-    ftLg_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx;
+enum { ftLg_MF_SpecialHi =
+    ftLg_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx };
 
-static MotionFlags const ftLg_MF_SpecialLw =
-    ftLg_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx;
+enum { ftLg_MF_SpecialLw =
+    ftLg_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx };
 
-static MotionFlags const ftLg_MF_SpecialAirN =
-    ftLg_MF_SpecialN | Ft_MF_SkipParasol;
+enum { ftLg_MF_SpecialAirN =
+    ftLg_MF_SpecialN | Ft_MF_SkipParasol };
 
-static MotionFlags const ftLg_MF_SpecialAirS =
-    ftLg_MF_SpecialS | Ft_MF_SkipParasol;
+enum { ftLg_MF_SpecialAirS =
+    ftLg_MF_SpecialS | Ft_MF_SkipParasol };
 
-static MotionFlags const ftLg_MF_SpecialAirHi =
-    ftLg_MF_SpecialHi | Ft_MF_SkipParasol;
+enum { ftLg_MF_SpecialAirHi =
+    ftLg_MF_SpecialHi | Ft_MF_SkipParasol };
 
-static MotionFlags const ftLg_MF_SpecialAirLw =
-    ftLg_MF_SpecialLw | Ft_MF_SkipParasol;
+enum { ftLg_MF_SpecialAirLw =
+    ftLg_MF_SpecialLw | Ft_MF_SkipParasol };
 
-static MotionFlags const ftLg_MF_SpecialN_Coll =
-    Ft_MF_SkipColAnim | Ft_MF_UpdateCmd;
+enum { ftLg_MF_SpecialN_Coll =
+    Ft_MF_SkipColAnim | Ft_MF_UpdateCmd };
 
 typedef enum ftLuigi_MotionState {
     ftLg_MS_SpecialN = ftCo_MS_Count,

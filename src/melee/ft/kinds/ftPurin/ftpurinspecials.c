@@ -20,8 +20,12 @@
 #include <sysdolphin/baselib/archive.h>
 #include <sysdolphin/baselib/gobj.h>
 
-static MotionFlags const ftPr_MF_SpecialS_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx | Ft_MF_SkipHit;
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { ftPr_MF_SpecialS_Coll =
+    ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx | Ft_MF_SkipHit };
 
 static float calcAngleRadians(HSD_GObj* gobj, float lstick_y)
 {

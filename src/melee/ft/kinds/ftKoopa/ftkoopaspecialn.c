@@ -21,8 +21,12 @@
 #include <melee/lb/lb_00B0.h>
 #include <sysdolphin/baselib/random.h>
 
-static MotionFlags const ftKp_MF_SpecialN_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_SkipRumble;
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { ftKp_MF_SpecialN_Coll =
+    ftCommon_GroundAirColl_MF | Ft_MF_SkipRumble };
 
 enum_t ftKp_Init_803CF2A0[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,

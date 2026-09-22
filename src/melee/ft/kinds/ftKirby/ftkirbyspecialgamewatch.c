@@ -23,8 +23,12 @@
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/random.h>
 
-static MotionFlags const ftKb_MF_GwSpecialN_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit;
+/* MotionFlags combinators are enum constants, not static const
+ * objects: MSVC C rejects static initializers that reference other
+ * static objects (C2099). Same pattern as FtMotionFlags in
+ * melee/ft/forward.h. */
+enum { ftKb_MF_GwSpecialN_Coll =
+    ftCommon_GroundAirColl_MF | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit };
 
 /* 10CE5C */ static void fn_8010CE5C(Fighter_GObj* gobj);
 /* 10CFB0 */ static void fn_8010CFB0(Fighter_GObj* gobj);
