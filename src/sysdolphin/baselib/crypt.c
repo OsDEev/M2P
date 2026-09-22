@@ -5,7 +5,9 @@
 void HSD_Checksum(u8* src, int len, void* dest)
 {
     int i;
-    const int md5_bytes = 16;
+    // Plain enum (not const int): MSVC C has no VLAs, so the array bound
+    // below must be a true constant expression.
+    enum { md5_bytes = 16 };
 
     // bytes are reversed for big-endian
     u8 md5_init[md5_bytes];

@@ -1,6 +1,10 @@
 #include "sislib.h"
 
+// <printf.h> is glibc's printf-extension API: absent on MSVC, and unused
+// here (IWYU leftover; MSL/MWERKS ships its own under this name).
+#ifndef _MSC_VER
 #include <printf.h> // IWYU pragma: keep
+#endif
 #include <stdio.h>
 
 #include "cobj.h"
