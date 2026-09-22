@@ -52,7 +52,9 @@ void lbFile_800161C4(int file, uintptr_t src, uintptr_t dst, size_t size,
 
 #define MAX_FILENAME_LENGTH 0x20
 const int FILE_EXTENSION_LENGTH = 4; // ".usd" or ".dat"
-const int MAX_BASENAME_LENGTH = MAX_FILENAME_LENGTH - FILE_EXTENSION_LENGTH;
+// Object-like macro: MSVC C rejects file-scope const initializers that
+// reference other const objects (C2099).
+#define MAX_BASENAME_LENGTH (MAX_FILENAME_LENGTH - FILE_EXTENSION_LENGTH)
 
 /// append file extension (if needed)
 char* lbFileGetFullName(const char* basename)

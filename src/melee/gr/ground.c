@@ -3266,7 +3266,9 @@ int Ground_801C5940(void)
     }* phi_r8;
     int i, j, out_idx;
     UnkArchiveStruct* archive;
-    const size_t vals_count = 32;
+    // Plain enum (not const size_t): MSVC C has no VLAs, so the array
+    // bound below must be a true constant expression.
+    enum { vals_count = 32 };
     u8 _[4];
     int vals[vals_count];
     archive = grDatFiles_GetArchive();

@@ -282,7 +282,9 @@ void ftLg_SpecialAirSHold_Coll(HSD_GObj* gobj)
     }
 }
 
-static u32 const transition_flags1 = transition_flags0 | Ft_MF_KeepGfx;
+// Object-like macro: MSVC C rejects static initializers that reference
+// other static objects (C2099); transition_flags0 stays a static const.
+#define transition_flags1 (transition_flags0 | Ft_MF_KeepGfx)
 
 /// Luigi's Green Missile Charge ground -> air Acion State handler
 void ftLg_SpecialSHold_GroundToAir(HSD_GObj* gobj)

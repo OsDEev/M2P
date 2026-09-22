@@ -68,7 +68,9 @@ typedef struct grHeal_UnkData {
 
 static Vec3 const grHeal_803B84A8 = { 0.0F, 40.0F, 0.0F };
 
-static size_t const char_id_count = 26;
+// Plain enum (not const size_t): MSVC C has no VLAs, so the array bound
+// at the use site must be a true constant expression.
+enum { char_id_count = 26 };
 
 static s16 grHeal_803E83B8[] = { 29, 30, 31, 32, 33, 34, 35, 36, 37,
                                  38, 39, 40, 41, 42, 43, 44, 45, 46,

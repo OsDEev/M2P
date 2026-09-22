@@ -19,6 +19,9 @@
 #endif
 #define INF MSL_TrigF_80400774[0]
 
+// MSVC's <math.h> already defines atan2f/acosf/asinf (inline); the decomp
+// bodies below are kept for GCC/MWERKS.
+#ifndef _MSC_VER
 float atan2f(float y, float x)
 {
     if (GET_SIGN_BIT(x) == GET_SIGN_BIT(y)) {
@@ -41,7 +44,9 @@ float atan2f(float y, float x)
 
     return y;
 }
+#endif
 
+#ifndef _MSC_VER
 float acosf(float x)
 {
     float result = 1.0F - x * x;
@@ -59,11 +64,14 @@ float acosf(float x)
     }
     return (float) M_PI_2 - atanf(x * result);
 }
+#endif
 
+#ifndef _MSC_VER
 float asinf(float x)
 {
     return atanf(x * lb_sqrtf(-(x * x - 1.0f)));
 }
+#endif
 
 static float lb_sqrtf(float x)
 {

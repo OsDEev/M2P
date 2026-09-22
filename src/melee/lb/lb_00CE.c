@@ -24,6 +24,9 @@ static void sdata2_order(void)
 }
 #endif
 
+// MSVC's <math.h> already defines expf/powf (inline); the decomp bodies
+// below are kept for GCC/MWERKS.
+#ifndef _MSC_VER
 f32 expf(f32 arg8)
 {
     f32 var_f1;
@@ -59,7 +62,9 @@ f32 expf(f32 arg8)
     }
     return var_f3;
 }
+#endif
 
+#ifndef _MSC_VER
 f32 powf(f32 arg0, f32 arg1)
 {
     f32 temp_f1;
@@ -83,6 +88,7 @@ f32 powf(f32 arg0, f32 arg1)
     } while (var_f4 != temp_f1);
     return expf(arg1 * (2.0f * var_f4));
 }
+#endif
 
 s32 powi(s32 base, s32 exponent)
 {
