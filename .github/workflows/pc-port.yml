@@ -72,5 +72,12 @@ jobs:
 
     - name: Smoke test (--help)
       # --help exits before video init, so no display is needed.
-      run: ./build_pc/bin/melee_pc --help
+      # NOTE: Visual Studio is multi-config: the exe lands in
+      # bin/Release/, while single-config generators use bin/.
+      run: |
+        if [ -x ./build_pc/bin/melee_pc ]; then
+          ./build_pc/bin/melee_pc --help
+        else
+          ./build_pc/bin/Release/melee_pc.exe --help
+        fi
       shell: bash
