@@ -13,7 +13,10 @@ typedef jmp_t jtbl_t[];
 #define __frsqrte(x) sqrt(x)
 #define sqrtf__Ff(x) sqrtf(x)
 #define sqrtf_accurate(x) sqrtf(x)
-#define __fabs(f) fabsf(f)
+// NOTE: no `__fabs` shim here. glibc declares its own `__`-prefixed math
+// aliases (e.g. `__fabs`); a `#define __fabs(f) fabsf(f)` would rewrite
+// glibc's `double __fabs(double)` into a conflicting `double
+// fabsf(double)` redeclaration. Call fabs()/fabsf() directly instead.
 #endif
 
 #ifndef UNK_T

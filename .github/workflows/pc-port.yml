@@ -63,8 +63,10 @@ jobs:
         echo '```' >> "$GITHUB_STEP_SUMMARY"
         grep -E -i -m 30 'error|undefined reference' build_pc/build.log >> "$GITHUB_STEP_SUMMARY" || true
         echo '```' >> "$GITHUB_STEP_SUMMARY"
-        CTX=$(grep -E -i -A3 -m 8 '\berror\b' build_pc/build.log | head -50 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | paste -sd '%0A' -)
+        CTX=$(grep -E -i -A3 -m 30 '\berror\b' build_pc/build.log | head -120 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | paste -sd ' // ' -)
         if [ -n "$CTX" ]; then echo "::error::$CTX"; fi
+        OBJS=$(grep -oP 'CMakeFiles/\S+\.o(?=.*Error)|(?<=Failed to build ).*\.o' build_pc/build.log | sort -u | head -20 | paste -sd ' // ' -)
+        if [ -n "$OBJS" ]; then echo "::error::failing objects: $OBJS"; fi
       shell: bash
 
     - name: Smoke test (--help)

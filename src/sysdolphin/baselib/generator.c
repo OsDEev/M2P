@@ -881,7 +881,10 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
         case 8: /* sphere emission */
         {
             f32 r0 = gen->aux.cone.height;
-            if (r0 == 0.0F || __fabs(r0 - M_PI) < eps) {
+            // fabs (not __fabs): placeholder.h must not define an __fabs
+            // macro, it collides with glibc's own __fabs declaration.
+            // Double precision matches the retail intrinsic here.
+            if (r0 == 0.0F || fabs(r0 - M_PI) < eps) {
                 radius = HSD_Randf();
                 radius = sqrtf(radius);
                 radius = (f32) (M_PI_2 * radius);
