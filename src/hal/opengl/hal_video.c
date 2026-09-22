@@ -325,7 +325,9 @@ void VISetBlack(BOOL black)
     if (black && s_win) {
         int w, h;
         glfwGetFramebufferSize(s_win, &w, &h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // Via the loader (_gl prefix): bare glBindFramebuffer only
+        // exists in libGL, not in Windows opengl32.lib (GL 1.1).
+        _glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(s_win);
