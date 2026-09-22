@@ -229,7 +229,12 @@ bool un_80304780(void)
     { 7, 65 }, { 6, 66 }, { 5, 67 }, { 4, 68 }, { 3, 69 },
     { 2, 70 }, { 0, 73 }, { 1, 88 }, { 8, 83 },
 };
-/* 4A26B8 */ static struct _Toy_804A26B8_t _Toy_804A26B8;
+/* 4A26B8: retail BSS scratch holding a full Toy26B8 plus trophy
+ * state (~1KB, also viewed as Toy, char and u16 arrays). Typed as a sized
+ * blob: the old 12-byte header type let later writes absorb
+ * sibling BSS (e.g. pool structs). All views cast explicitly,
+ * as they already do. */
+static u8 _Toy_804A26B8[sizeof(struct Toy26B8)];
 /* 4A26C4 */ static char _Toy_devtext_buf_804A26C4[0x8C];
 /* 4A2750 */ static char _Toy_devtext_buf_804A2750[0xFC];
 /* 4A284C */ u16 Toy_804A284C[302];
@@ -1167,7 +1172,7 @@ void Toy_80305918(s8 arg0, s32 arg1, s32 arg2)
     u16* var_r3;
     u16 temp_val;
 
-    base = (u16*) &_Toy_804A26B8.x0;
+    base = (u16*) &_Toy_804A26B8[0];
     if (arg0 == 8) {
         return;
     }

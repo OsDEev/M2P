@@ -229,7 +229,7 @@ void un_802FF710(void)
     HSD_CObj* new_var;
     HSD_GObj* gobj = GObj_Create(0x13, 20, 0);
     if (gobj) {
-        new_var = HSD_CObjLoadDesc((HSD_CObjDesc*) &un_803F9E60);
+        new_var = HSD_CObjLoadDescHost((HSD_CObjDesc*) &un_803F9E60);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, new_var);
         GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, 11);
         gobj->gxlink_prios = 0x20000;

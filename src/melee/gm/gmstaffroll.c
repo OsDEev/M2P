@@ -1234,7 +1234,7 @@ void gm_Scene_StaffRoll_OnEnter(void* unused)
     }
     {
         HSD_GObj* gobj = GObj_Create(19, 20, 0);
-        HSD_CObj* cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &gm_803DD0F0);
+        HSD_CObj* cobj = HSD_CObjLoadDescHost((HSD_CObjDesc*) &gm_803DD0F0);
         gm_804D6834 = cobj;
         HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
         GObj_SetupGXLinkMax(gobj, fn_801AAA28, 8);

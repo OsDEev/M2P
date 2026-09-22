@@ -284,7 +284,7 @@ void DevText_CreateCObj(int classifier, int p_link, int gobj_priority,
 {
     HSD_GObj* gobj = GObj_Create(classifier, p_link, gobj_priority);
     if (gobj) {
-        HSD_CObj* cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &devtext_CObjDesc);
+        HSD_CObj* cobj = HSD_CObjLoadDescHost((HSD_CObjDesc*) &devtext_CObjDesc);
         if (cobj) {
             HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
             GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, gx_priority);

@@ -81,3 +81,17 @@ jobs:
           ./build_pc/bin/Release/melee_pc.exe --help
         fi
       shell: bash
+
+    - name: Upload exe (Windows)
+      # Lets users grab a fresh build without a toolchain: Actions page
+      # -> this run -> Artifacts. Needs no login to list; download
+      # requires a free GitHub account.
+      if: runner.os == 'Windows' && success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: melee_pc-${{ matrix.compiler }}-win32
+        path: |
+          build_pc/bin/Release/melee_pc.exe
+          build_pc/bin/Release/melee_romextract.exe
+        if-no-files-found: error
+        retention-days: 14

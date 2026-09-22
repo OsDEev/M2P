@@ -101,6 +101,23 @@ static inline int getRelayBufIdx(void)
     return -1;
 }
 
+// PC: with synchronous completion, globals like dvdDC/aramDC may be stale
+// after a nested callback unlinks or replaces the queue head. Never trust
+// them for "still queued?" decisions; walk the queues instead.
+static int devcom_still_queued(const HSD_DevCom* dc)
+{
+    int i;
+    const HSD_DevCom* cur;
+    for (i = 0; i < 4; i++) {
+        for (cur = devComStatus[i]; cur != NULL; cur = cur->next) {
+            if (cur == dc) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 // PC port note: sdk2 ARQ completes transfers synchronously inside
 // ARQPostRequest (retail ARAM DMA is async). The body below is written
 // for async completion: it posts, then does transfer bookkeeping. With
@@ -279,7 +296,11 @@ static void HSD_DevComDVDARAMEndCallback(ARQRequest* request)
                                          HSD_DevCom_804D77FC[i]->args, NULL,
                                          HSD_DevCom_804D77FC[i]->cancelflag);
     }
-    HSD_DevComARAMCallback_inline(HSD_DevCom_804D77FC[i]);
+    // NOTE: do NOT recycle the dc here. The caller (HSD_DevComDVDCallback)
+    // unlinks it from the status queue only after this returns; recycling
+    // first would overwrite its `next` link, and the unlink would then
+    // re-queue a stale entry (use-after-recycle). Recycling happens in
+    // the caller, mirroring the other completion paths.
     HSD_DevCom_804D77FC[i] = NULL;
 }
 
@@ -361,6 +382,13 @@ static void HSD_DevComDVDCallback(s32 result, DVDFileInfo* unused)
                 (uintptr_t) HSD_DevCom_804C6330_bufs[HSD_DevCom_804D77F7],
                 dvdDC->dest, dvdDC->size, HSD_DevComDVDARAMEndCallback);
             HSD_DevComUnlink(dvdDC);
+            // Recycle only after unlink (see EndCallback note); the other
+            // completion paths use the same unlink-then-recycle order.
+            dc = dvdDC;
+            enabled = OSDisableInterrupts();
+            dc->next = HSD_DevCom_804D77F0;
+            HSD_DevCom_804D77F0 = dc;
+            OSRestoreInterrupts(enabled);
             HSD_DevCom_804D77F5 = 0;
             HSD_DevComDVDWakeUp();
         }
@@ -399,7 +427,7 @@ void HSD_DevComDVDWakeUp(void)
                 DVDReadAsyncPrio(&fileinfo, (void*) dc->dest,
                                  MIN(dc->size, 0x80000), (s32) dc->src,
                                  HSD_DevComDVDMemCallback, 2);
-                if (dvdDC == dc) {
+                if (devcom_still_queued(dc)) {
                     // Still queued: the nested callback advanced one chunk
                     // but its re-wake was blocked; retail would continue
                     // on the next DVD interrupt, so pump explicitly.
@@ -421,7 +449,7 @@ void HSD_DevComDVDWakeUp(void)
                 DVDReadAsyncPrio(&fileinfo, HSD_DevCom_804C6330_bufs[buf_idx],
                                  MIN(dc->size, DEVCOM_BUF_SIZE), dc->src,
                                  HSD_DevComDVDCallback, 2);
-                if (dvdDC == dc) {
+                if (devcom_still_queued(dc)) {
                     HSD_DevCom_804D77F5 = 0;
                     OSRestoreInterrupts(enabled);
                     HSD_DevComDVDWakeUp();
@@ -490,7 +518,6 @@ int HSD_DevComRequest(int file, uintptr_t src, uintptr_t dest, size_t size,
     dc->type = type;
     dc->cancelflag = false;
     dc->callback = cb;
-    dc->args = args;
 
     enabled = OSDisableInterrupts();
     result = HSD_DevCom_804D6050 + pri;

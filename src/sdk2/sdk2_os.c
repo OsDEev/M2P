@@ -48,7 +48,12 @@ static unsigned long s_reset_code;
 static OSResetCallback s_reset_cb;
 static OSResetFunctionInfo* s_reset_funcs;
 
-static OSContext* s_current_ctx;
+// Dummy current context: retail always has one (set by thread switch),
+// but nothing on PC ever calls OSSetCurrentContext, so callers like
+// db_ClearFPUExceptions would dereference NULL. A permanent zeroed
+// context keeps them safe; FPU save/load are no-ops anyway.
+static OSContext s_implicit_ctx;
+static OSContext* s_current_ctx = &s_implicit_ctx;
 static OSThread s_main_thread;
 static int s_main_thread_init;
 

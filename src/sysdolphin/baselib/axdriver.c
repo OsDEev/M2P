@@ -10,6 +10,7 @@
 #include <dolphin/axfx.h>
 #include <dolphin/dvd.h>
 #include <dolphin/os.h>
+#include <pc/pc_endian.h> // Stage 2: .sem file data is big-endian
 
 void* AXDriverAlloc(size_t size)
 {
@@ -836,7 +837,10 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
 
     DVDClose(&fileInfo);
 
-    AXDriver_804D77A0 = ((s32*) AXDriver_804D7798)[0];
+    // Stage 2: the .sem blob is big-endian. Counts convert on read;
+    // offset entries convert (BE->host) and then relocate by the
+    // buffer base, matching retail pointer fixups.
+    AXDriver_804D77A0 = (s32) pc_rb32((u8*) AXDriver_804D7798 + 0);
     count = AXDriver_804D77A0;
     if (count != 0) {
         ptr = (void*) ((u8*) AXDriver_804D7798 + 4);
@@ -846,7 +850,8 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     offset = count * 4 + 4;
     AXDriver_804D77A4 = ptr;
 
-    AXDriver_804D77A8 = *(s32*) ((u8*) AXDriver_804D7798 + offset);
+    AXDriver_804D77A8 =
+        (s32) pc_rb32((u8*) AXDriver_804D7798 + offset);
     offset += 4;
     if (AXDriver_804D77A8 != 0) {
         ptr = (u8*) AXDriver_804D7798 + offset;
@@ -859,19 +864,20 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     j = i;
     while (i < AXDriver_804D77A8) {
         i++;
-        *(u32*) ((u8*) AXDriver_804D77AC + j) += (u32) AXDriver_804D7798 & ~3u;
+        u8* e = (u8*) AXDriver_804D77AC + j;
+        pc_wb32(e, pc_rb32(e) + ((u32) AXDriver_804D7798 & ~3u));
         j += 4;
     }
 
     offset += AXDriver_804D77A8 * 4;
     ptr = AXDriver_804D7798;
-    AXDriver_804D77B0 = *(s32*) ((u8*) ptr + offset);
+    AXDriver_804D77B0 = (s32) pc_rb32((u8*) ptr + offset);
     offset += 4;
     count = AXDriver_804D77B0;
     AXDriver_804D77B4 = count != 0 ? (u32*) ((u8*) ptr + offset) : NULL;
     offset += count * 4;
 
-    AXDriver_804D77B8 = *(s32*) ((u8*) ptr + offset);
+    AXDriver_804D77B8 = (s32) pc_rb32((u8*) ptr + offset);
     offset += 4;
     if (AXDriver_804D77B8 != 0) {
         ptr = (u8*) ptr + offset;
@@ -883,12 +889,13 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     i = j;
     while (j < AXDriver_804D77B8) {
         j++;
-        *(u32*) ((u8*) AXDriver_804D77BC + i) += (u32) AXDriver_804D7798 & ~3u;
+        u8* e = (u8*) AXDriver_804D77BC + i;
+        pc_wb32(e, pc_rb32(e) + ((u32) AXDriver_804D7798 & ~3u));
         i += 4;
     }
 
     offset += AXDriver_804D77B8 * 4;
-    AXDriver_804D77C0 = *(s32*) ((u8*) AXDriver_804D7798 + offset);
+    AXDriver_804D77C0 = (s32) pc_rb32((u8*) AXDriver_804D7798 + offset);
     offset += 4;
     if (AXDriver_804D77C0 != 0) {
         ptr = (u8*) AXDriver_804D7798 + offset;
@@ -900,7 +907,8 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     i = j;
     while (j < AXDriver_804D77C0) {
         j++;
-        *(u32*) ((u8*) AXDriver_804D77C4 + i) += (u32) AXDriver_804D7798 & ~3u;
+        u8* e = (u8*) AXDriver_804D77C4 + i;
+        pc_wb32(e, pc_rb32(e) + ((u32) AXDriver_804D7798 & ~3u));
         i += 4;
     }
 }

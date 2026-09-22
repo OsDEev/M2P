@@ -332,7 +332,7 @@ void fn_8017A078(s32 arg0)
     callbacks = config->x3C;
 
     gobj = GObj_Create(0x13, 0x14, 0);
-    cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &gmResultCameraDesc);
+    cobj = HSD_CObjLoadDescHost((HSD_CObjDesc*) &gmResultCameraDesc);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
 
     eye.y = (eye.y * (f32) (arg0 + 1)) + (0.7f * Player_800360D8(arg0));

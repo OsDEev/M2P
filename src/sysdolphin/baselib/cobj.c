@@ -1324,6 +1324,59 @@ static int CObjLoad(HSD_CObj* cobj, HSD_CObjDesc* desc)
     return 0;
 }
 
+// Host-order variant: desc is a runtime-built struct (statics, stack).
+// Copies natively, no conversion. Declared in cobj.h.
+static int CObjLoadHost(HSD_CObj* cobj, HSD_CObjDesc* desc)
+{
+    static Vec3 up = { 0.0f, 1.0f, 0.0f };
+    HSD_RectS16 viewport;
+    Scissor scissor;
+    u16 flags = desc->common.flags;
+    u16 projection_type = desc->common.projection_type;
+    cobj->flags = flags;
+    CObjResetFlags(cobj, flags);
+    viewport.xmin = desc->common.viewport.xmin;
+    viewport.xmax = desc->common.viewport.xmax;
+    viewport.ymin = desc->common.viewport.ymin;
+    viewport.ymax = desc->common.viewport.ymax;
+    HSD_CObjSetViewport(cobj, &viewport);
+    scissor.left = desc->common.scissor.left;
+    scissor.right = desc->common.scissor.right;
+    scissor.top = desc->common.scissor.top;
+    scissor.bottom = desc->common.scissor.bottom;
+    HSD_CObjSetScissor(cobj, &scissor);
+    HSD_WObjInit(cobj->eyepos, desc->common.eyepos);
+    HSD_WObjInit(cobj->interest, desc->common.interest);
+    HSD_CObjSetNear(cobj, desc->common.nnear);
+    HSD_CObjSetFar(cobj, desc->common.ffar);
+    if (flags & 1) {
+        if (desc->common.up_vector != NULL) {
+            HSD_CObjSetUpVector(cobj, desc->common.up_vector);
+        } else {
+            HSD_CObjSetUpVector(cobj, &up);
+        }
+    } else {
+        HSD_CObjSetRoll(cobj, desc->common.roll);
+    }
+    switch (projection_type) {
+    case PROJ_PERSPECTIVE:
+        HSD_CObjSetPerspective(cobj, desc->perspective.fov,
+                               desc->perspective.aspect);
+        break;
+    case PROJ_ORTHO:
+        HSD_CObjSetOrtho(cobj, desc->ortho.top, desc->ortho.bottom,
+                         desc->ortho.left, desc->ortho.right);
+        break;
+    case PROJ_FRUSTUM:
+        HSD_CObjSetFrustum(cobj, desc->frustum.top, desc->frustum.bottom,
+                           desc->frustum.left, desc->frustum.right);
+        break;
+    default:
+        HSD_ASSERT(0x7D0, 0);
+        break;
+    }
+    return 0;
+}
 void HSD_CObjInit(HSD_CObj* cobj, HSD_CObjDesc* desc)
 {
     if (cobj == NULL || desc == NULL) {
@@ -1352,6 +1405,28 @@ HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc)
     return NULL;
 }
 
+// Host-order variant of HSD_CObjLoadDesc below. Bypasses virtual dispatch
+// on purpose: subclass load() implementations expect big-endian file
+// data, but runtime descs are already host order.
+HSD_CObj* HSD_CObjLoadDescHost(HSD_CObjDesc* desc)
+{
+    HSD_ClassInfo* info;
+    HSD_CObj* cobj;
+
+    if (desc != NULL) {
+        if (desc->class_name == NULL ||
+            (info = hsdSearchClassInfo(desc->class_name)) == NULL)
+        {
+            cobj = HSD_CObjAlloc();
+        } else {
+            cobj = hsdNew(info);
+            HSD_ASSERT(0x7F7, cobj);
+        }
+        CObjLoadHost(cobj, desc);
+        return cobj;
+    }
+    return NULL;
+}
 static int CObjInit(HSD_Class* o)
 {
     HSD_CObj* cobj;

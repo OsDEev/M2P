@@ -247,6 +247,11 @@ int AXFXReverbStdInit(struct AXFX_REVERBSTD* rev)
 {
     if (!rev)
         return 0;
+    // The game memcpys a param template over this struct; delay-line
+    // descriptors arrive as stack garbage, and the `if (!inputs)` guards
+    // in setup cannot tell garbage from allocated lines. Clear runtime
+    // state first (params live outside rv) so setup allocates everything.
+    memset(&rev->rv, 0, sizeof(rev->rv));
     revstd_free(rev); // idempotent re-init
     revstd_setup(rev);
     if (!rev->rv.C[0].inputs)
@@ -400,6 +405,9 @@ int AXFXReverbHiInit(struct AXFX_REVERBHI* rev)
 {
     if (!rev)
         return 0;
+    // Same garbage-descriptor hazard as reverb-std: clear runtime state
+    // (params live outside rv) before free/setup.
+    memset(&rev->rv, 0, sizeof(rev->rv));
     revhi_free(rev);
     revhi_setup(rev);
     if (!rev->rv.C[0].inputs)
@@ -509,6 +517,9 @@ int AXFXChorusInit(struct AXFX_CHORUS* c)
 {
     if (!c)
         return 0;
+    // Same garbage-descriptor hazard: clear work state (params
+    // baseDelay/variation/period live outside work) before free/setup.
+    memset(&c->work, 0, sizeof(c->work));
     chorus_free(c);
     chorus_setup(c);
     if (!c->work.src.smpBase)
@@ -636,6 +647,9 @@ int AXFXDelayInit(struct AXFX_DELAY* d)
 {
     if (!d)
         return 0;
+    // Same garbage-descriptor hazard: clear only the line pointers
+    // (delay[]/feedback[]/output[] are params consumed by setup).
+    d->left = d->right = d->sur = NULL;
     delay_free(d);
     delay_setup(d);
     if (!d->left)

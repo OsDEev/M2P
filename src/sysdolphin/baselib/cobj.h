@@ -216,6 +216,9 @@ void HSD_CObjClearFlags(HSD_CObj*, u32);
 HSD_CObj* HSD_CObjGetCurrent(void);
 void HSD_CObjInit(HSD_CObj* cobj, HSD_CObjDesc* desc);
 HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc);
+// PC port (Stage 2): Host-order variant for runtime-built descs
+// (statics/stack; already host order, no conversion).
+HSD_CObj* HSD_CObjLoadDescHost(HSD_CObjDesc* desc);
 void HSD_CObjSetDefaultClass(HSD_ClassInfo* info);
 
 static inline MtxPtr HSD_CObjGetViewingMtxPtrDirect(HSD_CObj* cobj)
