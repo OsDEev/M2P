@@ -101,6 +101,19 @@ static inline int getRelayBufIdx(void)
     return -1;
 }
 
+// PC port note: sdk2 ARQ completes transfers synchronously inside
+// ARQPostRequest (retail ARAM DMA is async). The body below is written
+// for async completion: it posts, then does transfer bookkeeping. With
+// synchronous completion the callback (unlink, queue advance, reentrant
+// wakeups) already ran by the time ARQPostRequest returns, so each site:
+//  - raises aramstate BEFORE posting (a reentrant wakeup must not
+//    re-post the same chunk), and
+//  - applies bookkeeping only if its request is still queued
+//    (devComStatus[3] == cur); otherwise the nested path already
+//    finished everything.
+// Multi-chunk requests are drained by recursing (retail would continue
+// on the next ARQ interrupt); OSDisableInterrupts is a plain flag on PC,
+// so the recursion is safe.
 void HSD_DevComARAMWakeUp(void)
 {
     bool enabled;
@@ -108,6 +121,7 @@ void HSD_DevComARAMWakeUp(void)
     u32 xfer_size2;
     void (*arq_callback)(ARQRequest*);
     void (*arq_callback2)(ARQRequest*);
+    HSD_DevCom* cur;
 
     enabled = OSDisableInterrupts();
     if (aramstate != 0) {
@@ -116,6 +130,7 @@ void HSD_DevComARAMWakeUp(void)
     }
     aramDC = devComStatus[3];
     if (devComStatus[3] != NULL) {
+        cur = aramDC;
         if (aramDC->cancelflag) {
             if (aramDC->callback != NULL) {
                 aramDC->callback(aramDC->dcReq, aramDC->args, NULL, true);
@@ -145,51 +160,87 @@ void HSD_DevComARAMWakeUp(void)
                 }
                 DCStoreRange(HSD_DevCom_804C6330_bufs[req_idx],
                              DEVCOM_BUF_SIZE);
+                // PC: ARQ completes synchronously; see function note.
+                aramstate = 1;
                 ARQPostRequest(devComARQR[req_idx], 0, 0, 1,
                                (uintptr_t) HSD_DevCom_804C6330_bufs[req_idx],
-                               aramDC->dest, xfer_size, arq_callback);
-                aramDC->dest += xfer_size;
-                aramDC->size -= xfer_size;
-                aramstate = 1;
+                               cur->dest, xfer_size, arq_callback);
+                if (devComStatus[3] == cur) {
+                    cur->dest += xfer_size;
+                    cur->size -= xfer_size;
+                    aramstate = 1;
+                    if (cur->size > 0) {
+                        // More chunks remain; retail would continue on
+                        // the next ARQ interrupt, so pump explicitly.
+                        aramstate = 0;
+                        OSRestoreInterrupts(enabled);
+                        HSD_DevComARAMWakeUp();
+                        return;
+                    }
+                }
             } else if (aramDC->type == 0xB) {
-                DCStoreRange((void*) aramDC->src, aramDC->size);
-                ARQPostRequest(devComARQR[req_idx], 0, 0, 1, aramDC->src,
-                               aramDC->dest, aramDC->size,
-                               HSD_DevComARAMCallback);
+                DCStoreRange((void*) cur->src, cur->size);
+                // PC: ARQ completes synchronously; see function note.
                 aramstate = 1;
+                ARQPostRequest(devComARQR[req_idx], 0, 0, 1, cur->src,
+                               cur->dest, cur->size,
+                               HSD_DevComARAMCallback);
+                if (devComStatus[3] == cur) {
+                    aramstate = 1;
+                }
             } else if (aramDC->type == 0x19) {
-                DCInvalidateRange((void*) aramDC->dest, aramDC->size);
-                ARQPostRequest(devComARQR[req_idx], 0, 1, 1, aramDC->src,
-                               aramDC->dest, aramDC->size,
-                               HSD_DevComARAMCallback);
+                DCInvalidateRange((void*) cur->dest, cur->size);
+                // PC: ARQ completes synchronously; see function note.
                 aramstate = 1;
+                ARQPostRequest(devComARQR[req_idx], 0, 1, 1, cur->src,
+                               cur->dest, cur->size,
+                               HSD_DevComARAMCallback);
+                if (devComStatus[3] == cur) {
+                    aramstate = 1;
+                }
             } else if (aramDC->type == 0x1A) {
                 DCInvalidateRange(HSD_DevCom_804C6330_bufs[req_idx],
                                   DEVCOM_BUF_SIZE);
-                ARQPostRequest(devComARQR[req_idx], 0, 1, 1, aramDC->src,
-                               (uintptr_t) HSD_DevCom_804C6330_bufs[req_idx],
-                               aramDC->size, HSD_DevComARAMCallback);
+                // PC: ARQ completes synchronously; see function note.
                 aramstate = 1;
+                ARQPostRequest(devComARQR[req_idx], 0, 1, 1, cur->src,
+                               (uintptr_t) HSD_DevCom_804C6330_bufs[req_idx],
+                               cur->size, HSD_DevComARAMCallback);
+                if (devComStatus[3] == cur) {
+                    aramstate = 1;
+                }
             } else if (aramDC->type == 0x1B) {
                 DCInvalidateRange(HSD_DevCom_804C6330_bufs[req_idx],
                                   DEVCOM_BUF_SIZE);
-                if (aramDC->size > DEVCOM_BUF_SIZE) {
+                if (cur->size > DEVCOM_BUF_SIZE) {
                     arq_callback2 = HSD_DevComStdCallback;
                     xfer_size2 = DEVCOM_BUF_SIZE;
                 } else {
                     arq_callback2 = HSD_DevComARAMCallback;
-                    xfer_size2 = aramDC->size;
+                    xfer_size2 = cur->size;
                 }
-                ARQPostRequest(&devComARQR[req_idx][1], 0, 1, 1, aramDC->src,
+                ARQPostRequest(&devComARQR[req_idx][1], 0, 1, 1, cur->src,
                                (uintptr_t) HSD_DevCom_804C6330_bufs[req_idx],
                                xfer_size2, NULL);
+                // PC: ARQ completes synchronously; see function note.
+                aramstate = 1;
                 ARQPostRequest(&devComARQR[req_idx][0], 0, 0, 1,
                                (uintptr_t) HSD_DevCom_804C6330_bufs[req_idx],
-                               aramDC->dest, xfer_size2, arq_callback2);
-                aramDC->src += xfer_size2;
-                aramDC->dest += xfer_size2;
-                aramDC->size -= xfer_size2;
-                aramstate = 1;
+                               cur->dest, xfer_size2, arq_callback2);
+                if (devComStatus[3] == cur) {
+                    cur->src += xfer_size2;
+                    cur->dest += xfer_size2;
+                    cur->size -= xfer_size2;
+                    aramstate = 1;
+                    if (cur->size > 0) {
+                        // More chunks remain; retail would continue on
+                        // the next ARQ interrupt, so pump explicitly.
+                        aramstate = 0;
+                        OSRestoreInterrupts(enabled);
+                        HSD_DevComARAMWakeUp();
+                        return;
+                    }
+                }
             }
         }
     }
@@ -339,20 +390,43 @@ void HSD_DevComDVDWakeUp(void)
             }
             DVDFastOpen(dvdDC->file, &fileinfo);
             if (dvdDC->type == 0x21) {
-                DVDReadAsyncPrio(&fileinfo, (void*) dvdDC->dest,
-                                 MIN(dvdDC->size, 0x80000), (s32) dvdDC->src,
-                                 HSD_DevComDVDMemCallback, 2);
+                HSD_DevCom* dc = dvdDC;
+                // PC: DVD completes synchronously (sdk2 reads host files
+                // inline); claim busy BEFORE posting so a reentrant wakeup
+                // cannot re-post the same chunk (the advance below runs
+                // only after the nested callback returns).
                 HSD_DevCom_804D77F5 = 1;
+                DVDReadAsyncPrio(&fileinfo, (void*) dc->dest,
+                                 MIN(dc->size, 0x80000), (s32) dc->src,
+                                 HSD_DevComDVDMemCallback, 2);
+                if (dvdDC == dc) {
+                    // Still queued: the nested callback advanced one chunk
+                    // but its re-wake was blocked; retail would continue
+                    // on the next DVD interrupt, so pump explicitly.
+                    // (Nested completion paths clear 77F5 themselves.)
+                    HSD_DevCom_804D77F5 = 0;
+                    OSRestoreInterrupts(enabled);
+                    HSD_DevComDVDWakeUp();
+                    return;
+                }
                 OSRestoreInterrupts(enabled);
                 return;
             }
             buf_idx = getRelayBufIdx();
             if (buf_idx >= 0) {
+                HSD_DevCom* dc = dvdDC;
                 HSD_DevCom_804D77F6 = buf_idx;
-                DVDReadAsyncPrio(&fileinfo, HSD_DevCom_804C6330_bufs[buf_idx],
-                                 MIN(dvdDC->size, DEVCOM_BUF_SIZE), dvdDC->src,
-                                 HSD_DevComDVDCallback, 2);
+                // PC: same sync-completion reasoning as above.
                 HSD_DevCom_804D77F5 = 1;
+                DVDReadAsyncPrio(&fileinfo, HSD_DevCom_804C6330_bufs[buf_idx],
+                                 MIN(dc->size, DEVCOM_BUF_SIZE), dc->src,
+                                 HSD_DevComDVDCallback, 2);
+                if (dvdDC == dc) {
+                    HSD_DevCom_804D77F5 = 0;
+                    OSRestoreInterrupts(enabled);
+                    HSD_DevComDVDWakeUp();
+                    return;
+                }
                 OSRestoreInterrupts(enabled);
                 return;
             }

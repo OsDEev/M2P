@@ -638,11 +638,16 @@ void OSFillFPUContext(OSContext* context)
 
 // ------------------------------------------------------------ heap
 #define HEAP_MAX 8
+// The header is padded to 32 bytes so every payload is 32-byte aligned
+// (retail DMA/ARAM paths assert src/dest/size % 32 == 0; the arena base
+// itself is page-aligned, sizes are 32-rounded, so alignment holds).
 typedef struct HeapBlock {
     size_t size;
     int used;
     struct HeapBlock* next;
+    u8 _pad[20];
 } HeapBlock;
+_Static_assert(sizeof(HeapBlock) == 32, "HeapBlock must stay 32 bytes");
 
 typedef struct {
     int used;
@@ -663,7 +668,10 @@ void* OSInitAlloc(void* arenaStart, void* arenaEnd, int maxHeaps)
     s_heaps[0].head->used = 0;
     s_heaps[0].head->next = NULL;
     __OSCurrHeap = 0;
-    return arenaEnd;
+    // NOTE: returns the UNCHANGED arena start. Returning arenaEnd here
+    // would make the caller (HSD_OSInit) move the arena lo past hi,
+    // collapsing the arena so every later heap lives outside it.
+    return arenaStart;
 }
 
 int OSCreateHeap(void* start, void* end)

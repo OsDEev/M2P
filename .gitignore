@@ -149,6 +149,14 @@ melee_pc.ini
 melee_card_*.mci
 *.mci
 
+# Local game dumps (never commit): plain images and Dolphin containers.
+*.iso
+*.gcm
+*.rvz
+*.gcz
+*.ciso
+*.wia
+
 # Mongo Explorer plugin
 .idea/**/mongoSettings.xml
 
