@@ -4,63 +4,47 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/kinds/ftCommon/forward.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftPe_MF_Base = Ft_MF_SkipItemVis | Ft_MF_FreezeState };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftPe_MF_Base (Ft_MF_SkipItemVis | Ft_MF_FreezeState)
 
-enum { ftPe_MF_FloatAttack =
-    ftPe_MF_Base | Ft_MF_SkipParasol };
+#define ftPe_MF_FloatAttack (ftPe_MF_Base | Ft_MF_SkipParasol)
 
-enum { ftPe_MF_FloatAttackAirN =
-    ftPe_MF_FloatAttack | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit };
+#define ftPe_MF_FloatAttackAirN (ftPe_MF_FloatAttack | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit)
 
-enum { ftPe_MF_Move_14 =
-    ftPe_MF_FloatAttackAirN | Ft_MF_KeepFastFall };
+#define ftPe_MF_Move_14 (ftPe_MF_FloatAttackAirN | Ft_MF_KeepFastFall)
 
-enum { ftPe_MF_FloatAttackAirB =
-    ftPe_MF_FloatAttackAirN | Ft_MF_KeepGfx };
+#define ftPe_MF_FloatAttackAirB (ftPe_MF_FloatAttackAirN | Ft_MF_KeepGfx)
 
-enum { ftPe_MF_FloatAttackAirHi =
-    ftPe_MF_FloatAttackAirN | Ft_MF_KeepFastFall | Ft_MF_KeepGfx };
+#define ftPe_MF_FloatAttackAirHi (ftPe_MF_FloatAttackAirN | Ft_MF_KeepFastFall | Ft_MF_KeepGfx)
 
-enum { ftPe_MF_Move_17 =
-    ftPe_MF_FloatAttack | Ft_MF_SkipModel };
+#define ftPe_MF_Move_17 (ftPe_MF_FloatAttack | Ft_MF_SkipModel)
 
-enum { ftPe_MF_AttackS4 = ftPe_MF_Base | Ft_MF_KeepFastFall |
-                                            Ft_MF_SkipHit | Ft_MF_KeepSfx |
-                                            Ft_MF_SkipRumble };
+#define ftPe_MF_AttackS4 (ftPe_MF_Base | Ft_MF_KeepFastFall | Ft_MF_SkipHit | Ft_MF_KeepSfx | Ft_MF_SkipRumble)
 
-enum { ftPe_MF_Special =
-    ftPe_MF_Base | Ft_MF_SkipModel | Ft_MF_UnkUpdatePhys };
+#define ftPe_MF_Special (ftPe_MF_Base | Ft_MF_SkipModel | Ft_MF_UnkUpdatePhys)
 
-enum { ftPe_MF_SpecialN =
-    ftPe_MF_Special | Ft_MF_KeepFastFall };
+#define ftPe_MF_SpecialN (ftPe_MF_Special | Ft_MF_KeepFastFall)
 
-enum { ftPe_MF_SpecialHi = ftPe_MF_SpecialN | Ft_MF_KeepGfx };
+#define ftPe_MF_SpecialHi (ftPe_MF_SpecialN | Ft_MF_KeepGfx)
 
-enum { ftPe_MF_SpecialLw =
-    ftPe_MF_Special | Ft_MF_KeepColAnimHitStatus };
+#define ftPe_MF_SpecialLw (ftPe_MF_Special | Ft_MF_KeepColAnimHitStatus)
 
-enum { ftPe_MF_SpecialS =
-    ftPe_MF_Special | Ft_MF_KeepGfx | Ft_MF_KeepSfx };
+#define ftPe_MF_SpecialS (ftPe_MF_Special | Ft_MF_KeepGfx | Ft_MF_KeepSfx)
 
-enum { ftPe_MF_SpecialAirN =
-    ftPe_MF_SpecialN | Ft_MF_SkipParasol };
+#define ftPe_MF_SpecialAirN (ftPe_MF_SpecialN | Ft_MF_SkipParasol)
 
-enum { ftPe_MF_SpecialAirHi =
-    ftPe_MF_SpecialHi | Ft_MF_SkipParasol };
+#define ftPe_MF_SpecialAirHi (ftPe_MF_SpecialHi | Ft_MF_SkipParasol)
 
-enum { ftPe_MF_SpecialAirS =
-    ftPe_MF_SpecialS | Ft_MF_SkipParasol };
+#define ftPe_MF_SpecialAirS (ftPe_MF_SpecialS | Ft_MF_SkipParasol)
 
-enum { ftPe_MF_ParasolOpen =
-    Ft_MF_SkipHit | Ft_MF_SkipModel | Ft_MF_Unk06 | Ft_MF_SkipItemVis |
-    Ft_MF_SkipModelPartVis };
+#define ftPe_MF_ParasolOpen (Ft_MF_SkipHit | Ft_MF_SkipModel | Ft_MF_Unk06 | Ft_MF_SkipItemVis | Ft_MF_SkipModelPartVis)
 
-enum { ftPe_MF_ParasolFallSpecial =
-    ftPe_MF_ParasolOpen | Ft_MF_Unk19 };
+#define ftPe_MF_ParasolFallSpecial (ftPe_MF_ParasolOpen | Ft_MF_Unk19)
 
 typedef enum ftPeach_MotionState {
     ftPe_MS_Float = ftCo_MS_Count,

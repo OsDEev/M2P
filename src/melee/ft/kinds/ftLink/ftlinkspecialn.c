@@ -36,16 +36,15 @@ typedef enum cmd_var_idx {
     cmd_unk3,
 } cmd_var_idx;
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { mf = Ft_MF_SkipModel | Ft_MF_SkipItemVis };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define mf (Ft_MF_SkipModel | Ft_MF_SkipItemVis)
 
-enum { coll_mf =
-    Ft_MF_SkipModel | Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_UpdateCmd |
-    Ft_MF_SkipItemVis | Ft_MF_Unk19 | Ft_MF_SkipModelPartVis |
-    Ft_MF_SkipModelFlags | Ft_MF_Unk27 };
+#define coll_mf (Ft_MF_SkipModel | Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_UpdateCmd | Ft_MF_SkipItemVis | Ft_MF_Unk19 | Ft_MF_SkipModelPartVis | Ft_MF_SkipModelFlags | Ft_MF_Unk27)
 
 ftLk_SpecialNIndex ftLk_SpecialN_GetIndex(Fighter_GObj* gobj)
 {

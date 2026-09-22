@@ -20,14 +20,14 @@
 #include <melee/ft/types.h>
 #include <melee/it/kinds/itfoxillusion.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftFx_MF_SpecialS_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_SkipRumble };
-enum { ftFx_MF_SpecialSDash_Coll =
-    ftFx_MF_SpecialS_Coll | Ft_MF_KeepColAnimHitStatus };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftFx_MF_SpecialS_Coll (ftCommon_GroundAirColl_MF | Ft_MF_SkipRumble)
+#define ftFx_MF_SpecialSDash_Coll (ftFx_MF_SpecialS_Coll | Ft_MF_KeepColAnimHitStatus)
 
 /// 0x800E9DF8
 /// https://decomp.me/scratch/5Qwzg // Create Fox Illusion / Falco Phantasm GFX

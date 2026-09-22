@@ -59,6 +59,7 @@ jobs:
       # the first errors there too (workflow-command escaping applied).
       if: failure()
       run: |
+        set +e
         echo '## Build errors (first 30)' >> "$GITHUB_STEP_SUMMARY"
         echo '```' >> "$GITHUB_STEP_SUMMARY"
         grep -E -i -m 30 'error|undefined reference' build_pc/build.log >> "$GITHUB_STEP_SUMMARY" || true

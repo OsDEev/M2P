@@ -21,13 +21,13 @@
 #include <melee/it/kinds/itsamusbomb.h>
 #include <melee/lb/lb_00B0.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftSs_MF_SpecialLw_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit |
-    Ft_MF_SkipModel };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftSs_MF_SpecialLw_Coll (ftCommon_GroundAirColl_MF | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit | Ft_MF_SkipModel)
 
 void ftSs_SpecialLw_8012ADF0(Fighter_GObj* gobj)
 {

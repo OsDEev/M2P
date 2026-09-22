@@ -12,8 +12,14 @@
 #define MSL_HI(x) *(int*) &x
 #define MSL_LO(x) *(1 + (int*) &x)
 
+// Guarded: MSVC <math.h> defines these too when _USE_MATH_DEFINES is
+// set (same values); a bare redefinition would warn (C4005).
+#ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+#ifndef M_PI_2
 #define M_PI_2 (M_PI / 2)
+#endif
 
 enum FloatType {
     FP_NAN = 1,

@@ -4,73 +4,57 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/kinds/ftCommon/forward.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftGw_MF_Base = Ft_MF_SkipItemVis | Ft_MF_FreezeState };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftGw_MF_Base (Ft_MF_SkipItemVis | Ft_MF_FreezeState)
 
-enum { ftGw_MF_Landing = Ft_MF_KeepColAnimHitStatus |
-                                           Ft_MF_SkipHit | Ft_MF_KeepSfx |
-                                           Ft_MF_SkipParasol };
+#define ftGw_MF_Landing (Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit | Ft_MF_KeepSfx | Ft_MF_SkipParasol)
 
-enum { ftGw_MF_LandingAirB = ftGw_MF_Landing | Ft_MF_KeepGfx };
+#define ftGw_MF_LandingAirB (ftGw_MF_Landing | Ft_MF_KeepGfx)
 
-enum { ftGw_MF_LandingAirHi =
-    ftGw_MF_LandingAirB | Ft_MF_KeepFastFall };
+#define ftGw_MF_LandingAirHi (ftGw_MF_LandingAirB | Ft_MF_KeepFastFall)
 
-enum { ftGw_MF_Attack = ftGw_MF_Base | Ft_MF_KeepSfx };
+#define ftGw_MF_Attack (ftGw_MF_Base | Ft_MF_KeepSfx)
 
-enum { ftGw_MF_AttackLw3 = ftGw_MF_Attack | Ft_MF_SkipHit };
+#define ftGw_MF_AttackLw3 (ftGw_MF_Attack | Ft_MF_SkipHit)
 
-enum { ftGw_MF_AttackAirN = ftGw_MF_Attack | ftGw_MF_Landing };
+#define ftGw_MF_AttackAirN (ftGw_MF_Attack | ftGw_MF_Landing)
 
-enum { ftGw_MF_AttackAirB =
-    ftGw_MF_AttackAirN | Ft_MF_KeepGfx };
+#define ftGw_MF_AttackAirB (ftGw_MF_AttackAirN | Ft_MF_KeepGfx)
 
-enum { ftGw_MF_AttackAirHi =
-    ftGw_MF_AttackAirB | Ft_MF_KeepFastFall };
+#define ftGw_MF_AttackAirHi (ftGw_MF_AttackAirB | Ft_MF_KeepFastFall)
 
-enum { ftGw_MF_AttackS4 =
-    ftGw_MF_AttackLw3 | Ft_MF_KeepFastFall | Ft_MF_SkipRumble };
+#define ftGw_MF_AttackS4 (ftGw_MF_AttackLw3 | Ft_MF_KeepFastFall | Ft_MF_SkipRumble)
 
-enum { ftGw_MF_Attack11 =
-    ftGw_MF_Attack | Ft_MF_KeepFastFall | Ft_MF_Unk19 };
+#define ftGw_MF_Attack11 (ftGw_MF_Attack | Ft_MF_KeepFastFall | Ft_MF_Unk19)
 
-enum { ftGw_MF_Attack100 =
-    ftGw_MF_Attack | Ft_MF_KeepColAnimHitStatus | Ft_MF_Unk19 };
+#define ftGw_MF_Attack100 (ftGw_MF_Attack | Ft_MF_KeepColAnimHitStatus | Ft_MF_Unk19)
 
-enum { ftGw_MF_Special =
-    ftGw_MF_Base | Ft_MF_SkipModel | Ft_MF_UnkUpdatePhys };
+#define ftGw_MF_Special (ftGw_MF_Base | Ft_MF_SkipModel | Ft_MF_UnkUpdatePhys)
 
-enum { ftGw_MF_SpecialS = ftGw_MF_Special | Ft_MF_KeepGfx };
+#define ftGw_MF_SpecialS (ftGw_MF_Special | Ft_MF_KeepGfx)
 
-enum { ftGw_MF_SpecialHi =
-    ftGw_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx };
+#define ftGw_MF_SpecialHi (ftGw_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx)
 
-enum { ftGw_MF_SpecialLwCatch =
-    ftGw_MF_Special | Ft_MF_KeepColAnimHitStatus };
+#define ftGw_MF_SpecialLwCatch (ftGw_MF_Special | Ft_MF_KeepColAnimHitStatus)
 
-enum { ftGw_MF_SpecialN =
-    ftGw_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException };
+#define ftGw_MF_SpecialN (ftGw_MF_Special | Ft_MF_KeepFastFall | Ft_MF_SkipThrowException)
 
-enum { ftGw_MF_SpecialAirS =
-    ftGw_MF_SpecialS | Ft_MF_SkipParasol };
+#define ftGw_MF_SpecialAirS (ftGw_MF_SpecialS | Ft_MF_SkipParasol)
 
-enum { ftGw_MF_SpecialAirHi =
-    ftGw_MF_SpecialHi | Ft_MF_SkipParasol };
+#define ftGw_MF_SpecialAirHi (ftGw_MF_SpecialHi | Ft_MF_SkipParasol)
 
-enum { ftGw_MF_SpecialAirLwCatch =
-    ftGw_MF_SpecialLwCatch | Ft_MF_SkipParasol };
+#define ftGw_MF_SpecialAirLwCatch (ftGw_MF_SpecialLwCatch | Ft_MF_SkipParasol)
 
-enum { ftGw_MF_SpecialAirN =
-    ftGw_MF_SpecialN | Ft_MF_SkipParasol };
+#define ftGw_MF_SpecialAirN (ftGw_MF_SpecialN | Ft_MF_SkipParasol)
 
-enum { ftGw_MF_SpecialLw =
-    ftGw_MF_SpecialLwCatch | Ft_MF_Unk19 };
+#define ftGw_MF_SpecialLw (ftGw_MF_SpecialLwCatch | Ft_MF_Unk19)
 
-enum { ftGw_MF_SpecialAirLw =
-    ftGw_MF_SpecialLw | Ft_MF_SkipParasol };
+#define ftGw_MF_SpecialAirLw (ftGw_MF_SpecialLw | Ft_MF_SkipParasol)
 
 /// Mr. Game & Watch Motion State IDs
 typedef enum ftGameWatch_MotionState {

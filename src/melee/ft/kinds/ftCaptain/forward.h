@@ -7,37 +7,31 @@
 typedef struct ftCaptain_DatAttrs ftCaptain_DatAttrs;
 typedef union ftCaptain_MotionVars ftCaptain_MotionVars;
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftCa_MF_Special = ftCo_MF_Special | Ft_MF_KeepSfx };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftCa_MF_Special (ftCo_MF_Special | Ft_MF_KeepSfx)
 
-enum { ftCa_MF_SpecialN =
-    ftCa_MF_Special | Ft_MF_KeepFastFall };
+#define ftCa_MF_SpecialN (ftCa_MF_Special | Ft_MF_KeepFastFall)
 
-enum { ftCa_MF_SpecialAirN =
-    ftCa_MF_SpecialN | Ft_MF_SkipParasol };
+#define ftCa_MF_SpecialAirN (ftCa_MF_SpecialN | Ft_MF_SkipParasol)
 
-enum { ftCa_MF_SpecialS = ftCa_MF_Special | Ft_MF_KeepGfx };
+#define ftCa_MF_SpecialS (ftCa_MF_Special | Ft_MF_KeepGfx)
 
-enum { ftCa_MF_SpecialAirSStart =
-    ftCa_MF_SpecialS | Ft_MF_SkipParasol };
+#define ftCa_MF_SpecialAirSStart (ftCa_MF_SpecialS | Ft_MF_SkipParasol)
 
-enum { ftCa_MF_SpecialAirS =
-    ftCa_MF_SpecialS | Ft_MF_SkipParasol };
+#define ftCa_MF_SpecialAirS (ftCa_MF_SpecialS | Ft_MF_SkipParasol)
 
-enum { ftCa_MF_SpecialHi =
-    ftCo_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx };
+#define ftCa_MF_SpecialHi (ftCo_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx)
 
-enum { ftCa_MF_SpecialAirHi =
-    ftCa_MF_SpecialHi | Ft_MF_SkipParasol };
+#define ftCa_MF_SpecialAirHi (ftCa_MF_SpecialHi | Ft_MF_SkipParasol)
 
-enum { ftCa_MF_SpecialLw =
-    ftCa_MF_Special | Ft_MF_KeepColAnimHitStatus };
+#define ftCa_MF_SpecialLw (ftCa_MF_Special | Ft_MF_KeepColAnimHitStatus)
 
-enum { ftCa_MF_SpecialLwRebound =
-    ftCa_MF_SpecialLw | Ft_MF_SkipParasol };
+#define ftCa_MF_SpecialLwRebound (ftCa_MF_SpecialLw | Ft_MF_SkipParasol)
 
 typedef enum ftCaptain_MotionState {
     ftCa_MS_SwordSwing4 = ftCo_MS_Count,

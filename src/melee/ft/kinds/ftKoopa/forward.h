@@ -4,41 +4,33 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/kinds/ftCommon/forward.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftKp_MF_Special =
-    Ft_MF_SkipModel | Ft_MF_SkipItemVis | Ft_MF_UnkUpdatePhys |
-    Ft_MF_FreezeState };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftKp_MF_Special (Ft_MF_SkipModel | Ft_MF_SkipItemVis | Ft_MF_UnkUpdatePhys | Ft_MF_FreezeState)
 
-enum { ftKp_MF_SpecialN =
-    ftKp_MF_Special | Ft_MF_KeepFastFall };
+#define ftKp_MF_SpecialN (ftKp_MF_Special | Ft_MF_KeepFastFall)
 
-enum { ftKp_MF_SpecialS = ftKp_MF_Special | Ft_MF_KeepGfx };
+#define ftKp_MF_SpecialS (ftKp_MF_Special | Ft_MF_KeepGfx)
 
-enum { ftKp_MF_SpecialHi =
-    ftKp_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx };
+#define ftKp_MF_SpecialHi (ftKp_MF_Special | Ft_MF_KeepFastFall | Ft_MF_KeepGfx | Ft_MF_KeepSfx)
 
-enum { ftKp_MF_SpecialLwStart =
-    ftKp_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx };
+#define ftKp_MF_SpecialLwStart (ftKp_MF_Special | Ft_MF_KeepColAnimHitStatus | Ft_MF_KeepSfx)
 
-enum { ftKp_MF_SpecialNStart =
-    ftKp_MF_SpecialN | Ft_MF_SkipParasol };
+#define ftKp_MF_SpecialNStart (ftKp_MF_SpecialN | Ft_MF_SkipParasol)
 
-enum { ftKp_MF_SpecialAirS =
-    ftKp_MF_SpecialS | Ft_MF_SkipParasol };
+#define ftKp_MF_SpecialAirS (ftKp_MF_SpecialS | Ft_MF_SkipParasol)
 
-enum { ftKp_MF_SpecialAirHi =
-    ftKp_MF_SpecialHi | Ft_MF_SkipParasol };
+#define ftKp_MF_SpecialAirHi (ftKp_MF_SpecialHi | Ft_MF_SkipParasol)
 
-enum { ftKp_MF_SpecialAirLw =
-    ftKp_MF_SpecialLwStart | Ft_MF_SkipParasol };
+#define ftKp_MF_SpecialAirLw (ftKp_MF_SpecialLwStart | Ft_MF_SkipParasol)
 
-enum { ftKp_MF_SpecialNLoop = ftKp_MF_SpecialN | Ft_MF_Unk19 };
+#define ftKp_MF_SpecialNLoop (ftKp_MF_SpecialN | Ft_MF_Unk19)
 
-enum { ftKp_MF_SpecialAirNLoop =
-    ftKp_MF_SpecialNLoop | Ft_MF_SkipParasol };
+#define ftKp_MF_SpecialAirNLoop (ftKp_MF_SpecialNLoop | Ft_MF_SkipParasol)
 
 typedef enum ftKoopa_MotionState {
     ftKp_MS_SpecialNStart = ftCo_MS_Count,

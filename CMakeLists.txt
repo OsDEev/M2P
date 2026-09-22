@@ -50,6 +50,10 @@ endif()
 # Port-wide feature flag (must be visible to every target: e.g. the
 # SDK os.h header switches bus-clock address macros to real variables).
 add_compile_definitions(MELEE_PC_PORT=1)
+# MSVC's <math.h> only exposes M_PI/M_PI_2/... with this defined; the
+# decomp uses them freely (MWERKS MSL always provides them). No-op on
+# GCC/glibc, which define them unconditionally.
+add_compile_definitions(_USE_MATH_DEFINES)
 
 # C11 for _Static_assert (used by STATIC_ASSERT in game headers); the
 # decomp itself builds these headers with MWERKS, MSVC needs the mode

@@ -41,20 +41,17 @@
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/random.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftKb_MF_SpecialN_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx };
-enum { ftKb_MF_SpecialN_Capture_Coll =
-    ftKb_MF_SpecialN_Coll | Ft_MF_SkipModel };
-enum { ftKb_MF_SpecialN_EatFall_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_SkipModel };
-enum { ftKb_MF_SpecialN_Loop_Coll =
-    ftKb_MF_SpecialN_Capture_Coll | Ft_MF_SkipHit | Ft_MF_KeepSfx };
-enum { ftKb_MF_SpecialN_LoopRumble_Coll =
-    ftKb_MF_SpecialN_Loop_Coll | Ft_MF_SkipRumble };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftKb_MF_SpecialN_Coll (ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx)
+#define ftKb_MF_SpecialN_Capture_Coll (ftKb_MF_SpecialN_Coll | Ft_MF_SkipModel)
+#define ftKb_MF_SpecialN_EatFall_Coll (ftCommon_GroundAirColl_MF | Ft_MF_SkipModel)
+#define ftKb_MF_SpecialN_Loop_Coll (ftKb_MF_SpecialN_Capture_Coll | Ft_MF_SkipHit | Ft_MF_KeepSfx)
+#define ftKb_MF_SpecialN_LoopRumble_Coll (ftKb_MF_SpecialN_Loop_Coll | Ft_MF_SkipRumble)
 
 /* 0F6178 */ static void fn_800F6178(Fighter_GObj* gobj);
 /* 0F6210 */ static void fn_800F6210(Fighter_GObj* gobj);

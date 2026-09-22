@@ -23,12 +23,13 @@
 #include <melee/it/kinds/itzeldadinfire.h>
 #include <melee/lb/lb_00B0.h>
 
-/* MotionFlags combinators are enum constants, not static const
- * objects: MSVC C rejects static initializers that reference other
- * static objects (C2099). Same pattern as FtMotionFlags in
- * melee/ft/forward.h. */
-enum { ftZd_MF_SpecialSStart_Coll =
-    ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx };
+/* MotionFlags combinators are object-like macros (untyped constant
+ * expressions): MSVC C rejects static initializers that reference
+ * other static objects (C2099), and per-declaration anonymous enums
+ * give every constant a distinct type, tripping C5287 on `|`.
+ * Same pattern as FtMotionFlags in melee/ft/forward.h: names, values
+ * and order are unchanged. */
+#define ftZd_MF_SpecialSStart_Coll (ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx)
 
 /// 8013B638 - 8013B6D8 (160 bytes)
 /// https://decomp.me/scratch/QnXK1
