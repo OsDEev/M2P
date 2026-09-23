@@ -46,15 +46,22 @@ struct HSD_SynthSFXNode {
 
 static AXVPB* voicelist[0x100 / 4];
 static void* hsd_SynthSFXDataHash[0x80 / 4];
+// DevCom ARAM DMA asserts 32-byte src/dest/size; retail BSS happens to
+// satisfy it, so force it explicitly (MSVC packs these at 4 bytes).
+#if defined(_MSC_VER)
+#define SYNTH_ALIGN32 __declspec(align(32))
+#else
+#define SYNTH_ALIGN32 __attribute__((aligned(32)))
+#endif
 static struct {
     /* 00 */ int entrynum;
     /* 04 */ int bankID;
     /* 08 */ void (*x8)(int, int);
     /* 0C */ int xC;
 } HSD_Synth_804C2A60[6];
-static u32 hsd_SynthSFXLoadBuf[0x20 / 4];
+static SYNTH_ALIGN32 u32 hsd_SynthSFXLoadBuf[0x20 / 4];
 static AXVPB* HSD_Synth_804C2AE0[0x80 / 4];
-static int hsd_SynthSFXBank[0x80 / 4];
+static SYNTH_ALIGN32 int hsd_SynthSFXBank[0x80 / 4];
 static int hsd_SynthSFXBankHead[0x84 / 4];
 static struct HSD_SynthSFXNode hsd_SynthSFXNodes[0x40];
 
@@ -102,6 +109,6 @@ static struct {
 /* 4D7778 */ static volatile u8 HSD_Synth_804D7778;
 /* 4D777C */ static s32 HSD_Synth_804D777C;
 /* 4D7780 */ static u32 HSD_Synth_804D7780;
-/* 4D7784 */ static u32 HSD_Synth_804D7784;
+/* 4D7784 */ static SYNTH_ALIGN32 u32 HSD_Synth_804D7784;
 
 #endif
