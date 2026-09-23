@@ -110,7 +110,10 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
             n = (s32) pc_rb32(HSD_Synth_804D7734);
             (void) n;
             nbytes = SfxLoadStreamDataSize(n << 6);
-            memcpy((u8*) HSD_Synth_804D7730 + 8, HSD_Synth_804D7734, nbytes);
+            // NOTE: source and destination overlap by design (data
+            // shifts down within the node); memmove, not memcpy.
+            memmove((u8*) HSD_Synth_804D7730 + 8, HSD_Synth_804D7734,
+                    nbytes);
             for (k = 0; k < n; k++) {
                 // Stage 2: voice address fields stay big-endian; the ARAM
                 // base folds in value space so entry bytes remain valid
