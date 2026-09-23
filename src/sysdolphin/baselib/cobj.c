@@ -1285,8 +1285,35 @@ static int CObjLoad(HSD_CObj* cobj, HSD_CObjDesc* desc)
     HSD_CObjSetScissor(cobj, &scissor);
     HSD_WObjInit(cobj->eyepos, desc->common.eyepos);
     HSD_WObjInit(cobj->interest, desc->common.interest);
+    // Stage 2: WObj sub-desc positions are big-endian file data, but
+    // HSD_WObjInit reads them raw. Re-apply through a converted copy
+    // (the desc itself must stay untouched for later passes).
+    {
+        if (desc->common.eyepos != NULL) {
+            Vec3 eye_be;
+            eye_be.x = pc_rf32(&desc->common.eyepos->pos.x);
+            eye_be.y = pc_rf32(&desc->common.eyepos->pos.y);
+            eye_be.z = pc_rf32(&desc->common.eyepos->pos.z);
+            HSD_WObjSetPosition(cobj->eyepos, &eye_be);
+        }
+        if (desc->common.interest != NULL) {
+            Vec3 int_be;
+            int_be.x = pc_rf32(&desc->common.interest->pos.x);
+            int_be.y = pc_rf32(&desc->common.interest->pos.y);
+            int_be.z = pc_rf32(&desc->common.interest->pos.z);
+            HSD_WObjSetPosition(cobj->interest, &int_be);
+        }
+    }
     HSD_CObjSetNear(cobj, pc_rf32(&desc->common.nnear));
     HSD_CObjSetFar(cobj, pc_rf32(&desc->common.ffar));
+    // Some file descs carry near=far=0, which would NaN a perspective
+    // projection (division by far-near). Fall back to a sane range.
+    if (projection_type == PROJ_PERSPECTIVE && cobj->near == 0.f &&
+        cobj->far == 0.f)
+    {
+        HSD_CObjSetNear(cobj, 1.f);
+        HSD_CObjSetFar(cobj, 1000.f);
+    }
     if (flags & 1) {
         if (desc->common.up_vector != NULL) {
             Vec3 up_be;

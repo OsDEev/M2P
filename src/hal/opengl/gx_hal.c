@@ -1317,7 +1317,16 @@ static void cur_reset(void)
     for (i = 0; i < 8; i++)
         for (j = 0; j < 2; j++)
             s_cur.uv[i][j] = 0;
-    s_cur.mtx = 0;
+    // Default matrix = current GX matrix (retail: verts without PNMTXIDX
+    // use GXSetCurrentMtx). GX ids are 0,3,6..; the shader wants the slot.
+    {
+        int slot = s_cur_mtx / 3;
+        if (slot < 0)
+            slot = 0;
+        if (slot > 9)
+            slot = 9;
+        s_cur.mtx = (float) slot;
+    }
     s_fed_mask = 0;
 }
 
@@ -1533,8 +1542,22 @@ static void feed_uv(int unit, const float* v, int n)
 
 static void feed_mtx(float m)
 {
-    s_cur.mtx = m;
+    // Retail matrix-index bytes are GX ids (0,3,6..); the shader wants the
+    // slot (id/3). TEXMTXIDX bytes must NOT land here (separate register on
+    // retail); they go to feed_texmtx() instead.
+    int slot = ((int) (m + 0.5f)) / 3;
+    if (slot < 0)
+        slot = 0;
+    if (slot > 9)
+        slot = 9;
+    s_cur.mtx = (float) slot;
     cur_fed(attr_bit(GX_VA_PNMTXIDX));
+}
+
+static void feed_texmtx(GXAttr attr)
+{
+    // Position-matrix slot untouched; texgen matrices come from uniforms.
+    cur_fed(attr_bit(attr));
 }
 
 static void feed_index(GXAttr attr, unsigned idx)
@@ -1562,17 +1585,34 @@ static void feed_index(GXAttr attr, unsigned idx)
         s_cur.uv[attr - GX_VA_TEX0][0] = tmpuv[0];
         s_cur.uv[attr - GX_VA_TEX0][1] = tmpuv[1];
         cur_fed(attr_bit(attr));
-    } else {
-        s_cur.mtx = tmpm;
+    } else if (attr == GX_VA_PNMTXIDX) {
+        int slot = ((int) (tmpm + 0.5f)) / 3;
+        if (slot < 0)
+            slot = 0;
+        if (slot > 9)
+            slot = 9;
+        s_cur.mtx = (float) slot;
         cur_fed(attr_bit(GX_VA_PNMTXIDX));
+    } else {
+        cur_fed(attr_bit(attr));
     }
 }
 
 // ------------------------------------------------------------------ GX_BEGIN
+// Forward: the flusher lives below (defined with the draw path).
+static void hal_flush_draw(void);
+
 void gx_hal_begin(GXPrimitive type, GXVtxFmt vtxfmt, u16 nverts)
 {
     int a;
     (void) nverts;
+    // Retail GXEnd is an empty inline: vertices hit the GP FIFO as they
+    // are written, so decomp code often opens a new primitive without any
+    // explicit end. Flush a pending batch here (the GP would already have
+    // consumed it); without this nothing ever draws.
+    if (s_vert_count > 0) {
+        hal_flush_draw();
+    }
     s_prim = type;
     s_vtxfmt = vtxfmt;
     s_vert_count = 0;
@@ -1692,6 +1732,15 @@ static void hal_flush_draw(void)
 void gx_hal_end(void)
 {
     hal_flush_draw();
+}
+
+// Drain any trailing batch that was never followed by another GXBegin
+// (called from present(), before swap).
+void gx_hal_flush(void)
+{
+    if (s_vert_count > 0) {
+        hal_flush_draw();
+    }
 }
 
 // ------------------------------------------------------------ display lists
@@ -1882,7 +1931,8 @@ void hal_execute_display_list(const u8* dl, u32 nbytes)
                 if (s_vtx.desc[a] == GX_DIRECT) {
                     if (!dl_need(dl, nbytes, pos, 1))
                         break;
-                    feed_mtx((float) dl[pos++]);
+                    pos++;
+                    feed_texmtx((GXAttr) a);
                 } else {
                     unsigned idx;
                     if (s_vtx.desc[a] == GX_INDEX16) {
@@ -2088,6 +2138,14 @@ void gx_hal_clear(GXColor color, u32 z)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+// Latch the GX copy-clear registers (GXSetCopyClear) for the clear that
+// gx_hal_copy_disp() performs after the EFB->screen blit.
+void gx_hal_set_copy_clear(GXColor color, u32 z)
+{
+    s_hal.clear_color = color;
+    s_hal.clear_z = z;
+}
+
 void gx_hal_set_tev_stage(GXTevStageID stage)
 {
     s_hal.current_tev_stage = stage;
@@ -2163,11 +2221,25 @@ void gx_hal_set_projection(GXProjectionType type, float left, float right,
 void gx_hal_load_projection_mtx(float* mtx, GXProjectionType type)
 {
     // GX Mtx44 is row-major; transpose into GL column-major.
+    // NOTE: the MTX*() builders only fill 3 rows (Mtx 3x4); row 3 of the
+    // source buffer is uninitialized stack garbage, so it is ALWAYS
+    // synthesized here: [0,0,-1,0] perspective (w = -z eye) or [0,0,0,1]
+    // orthographic.
     int r, c;
-    (void) type;
-    for (r = 0; r < 4; r++)
+    for (r = 0; r < 3; r++)
         for (c = 0; c < 4; c++)
             s_proj[c * 4 + r] = mtx[r * 4 + c];
+    if (type == GX_ORTHOGRAPHIC) {
+        s_proj[3] = 0.f;
+        s_proj[7] = 0.f;
+        s_proj[11] = 0.f;
+        s_proj[15] = 1.f;
+    } else {
+        s_proj[3] = 0.f;
+        s_proj[7] = 0.f;
+        s_proj[11] = -1.f;
+        s_proj[15] = 0.f;
+    }
 }
 
 void gx_hal_load_pos_mtx_imm(float* mtx, u32 mtx_idx)

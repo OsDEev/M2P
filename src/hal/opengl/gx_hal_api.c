@@ -1862,6 +1862,7 @@ void GXSetCopyClear(GXColor clear_clr, u32 clear_z)
 {
     s_copy_clear_c = clear_clr;
     s_copy_clear_z = clear_z;
+    gx_hal_set_copy_clear(clear_clr, clear_z);
 }
 
 void GXSetCopyFilter(GXBool aa, const u8 sample_pattern[12][2], GXBool vf,

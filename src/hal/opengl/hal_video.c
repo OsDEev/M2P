@@ -193,6 +193,8 @@ void hal_video_present(void)
         return;
     if (s_pre_cb)
         s_pre_cb(s_retrace);
+    // Drain the trailing vertex batch (direct draws have no GXEnd).
+    gx_hal_flush();
     glfwSwapBuffers(s_win);
     glfwPollEvents();
     if (s_frame_hook)

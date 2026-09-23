@@ -88,8 +88,10 @@ extern void gx_hal_swap_buffers(void);
 extern void gx_hal_set_viewport(float x, float y, float w, float h);
 extern void gx_hal_set_scissor(int x, int y, int w, int h);
 extern void gx_hal_clear(GXColor color, u32 z);
+extern void gx_hal_set_copy_clear(GXColor color, u32 z);
 extern void gx_hal_begin(GXPrimitive type, GXVtxFmt vtxfmt, u16 nverts);
 extern void gx_hal_end(void);
+extern void gx_hal_flush(void); // drain trailing batch (present path)
 extern void gx_hal_set_vtx_desc(GXAttr attr, GXAttrType type);
 extern void gx_hal_set_vtx_attr_fmt(GXVtxFmt vtxfmt, GXAttr attr, GXCompCnt cnt, GXCompType type, u8 frac);
 extern void gx_hal_set_array(GXAttr attr, const void* base_ptr, u8 stride);
